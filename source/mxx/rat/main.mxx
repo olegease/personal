@@ -1,10 +1,48 @@
 #ifndef APP_INCLUDE_STD
 import std;
 #else
-#include <print>
+#include <cstddef> // `size_t`
+#include <exception> // `exception`
+#include <filesystem> // `path`, `canonical`
+#include <fstream> // `ifstream`
+#include <iostream> // `cerr`
+#include <print> // `println`
+#include <stdexcept> // `runtime_error`
 #endif//APP_INCLUDE_STD
 
-int main( int argc, char *argv[] ) {
-    std::println( "rat: Random Assets Tearing" );
-    std::println( "\targc: {}, argv[0]: {}", argc, argv[0] );
+namespace fs = std::filesystem;
+
+namespace app {
+    template< typename Type > using Ref = Type const &;
+    using std::println;
+    using fs::canonical;
+    using fs::file_size;
+    using Path = fs::path;
+    using Catch = std::exception const &;
+    using InputFile = std::ifstream;
+    using Size = std::size_t;
+}
+
+int main( int argc, char *argv[] ) try {
+    using namespace app;
+    println( "rats: Random Assets Tearing" );
+    println( "\targc: {}, argv[0]: {}", argc, argv[0] );
+
+    if ( argc != 2 ) throw std::runtime_error( "only works with two arguments" );
+
+    Path path{ argv[1] };
+    println( "path: {}", canonical( path ).string( ));
+
+    Size fileSize = file_size( path );
+    println ("file size: {}", fileSize );
+
+    InputFile file{ path, std::ios::binary };
+
+    if ( not file.is_open( ) ) throw std::runtime_error{ "cannot open file" };
+
+    file.close( );
+} catch ( app::Catch e ) {
+    std::println( std::cerr, "std::exception: {}", e.what( ));
+} catch ( ... ) {
+    std::println( std::cerr, "... exception" );
 }

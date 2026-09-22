@@ -9,7 +9,10 @@ IMPORT := /usr/include/c++/16/bits/std.cc
 IMPOBJ := $(FOLDER)/stdmodule.o
 
 usage:
-	@echo 'mo20-rat: cat but show random chunks of 20% lines and 80 character line length by default'
+	@echo 'usage: make [command]'
+	@echo 'gencc: generate compile commands json'
+	@echo 'build: with c++23 g++ modules import std'
+	@echo 'start: run `rat` applciation'
 
 gencc:
 	@echo -e "[{" > $(CCJSON)
