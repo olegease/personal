@@ -1,2 +1,3 @@
-# `BOOSTING`
-> (TEMPLATE) for personal projects under Boost Software License
+# `PERSONAL`
+> short projects under Boost Software License
+
