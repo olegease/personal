@@ -1,1 +1,5 @@
 *.out
+*.o
+*.obj
+gcm.cache
+compile_commands.json
