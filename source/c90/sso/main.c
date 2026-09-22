@@ -8,6 +8,8 @@
 
 typedef char A7Char;
 typedef char *A7CPtr;
+typedef void *A7VPtr;
+typedef char const *A7CRef;
 typedef unsigned long A7Size;
 
 /* NOTE: size includes null character, cannot be passed as value type */
@@ -27,12 +29,13 @@ struct A7Text {
 
 
 typedef struct A7Text *A7TextPtr;
+typedef struct A7Text const *A7TextRef;
 
 A7Size a7_text_error_size( void );
 struct A7Text a7_text_init( void );
-A7Size a7_text_create( A7TextPtr out, char const *cstr );
+A7Size a7_text_create( A7TextPtr out, A7CRef cstr );
 void a7_text_delete( A7TextPtr out );
-A7Size a7_text_capacity( A7TextPtr const ref );
+A7Size a7_text_capacity( A7TextRef ref );
 /* NOTE: never pass it as pointer or change its data */
 static struct A7Text const A7_Text_Zeroed;
 
@@ -40,8 +43,8 @@ int main( void ) {
 
     struct A7Text textSmall, textLarge = a7_text_init( );
 
-    char const *small = "small";
-    char const *large = "large-large-large";
+    A7CRef small = "small";
+    A7CRef large = "large-large-large";
     A7Size textSmallSize = a7_text_create( &textSmall, small );
     A7Size textLargeSize = a7_text_create( &textLarge, large );
 
@@ -65,7 +68,7 @@ A7Size a7_text_error_size( void ) {
     return -1u;
 }
 
-A7Size a7_text_create( A7TextPtr out, char const *cstr ) {
+A7Size a7_text_create( A7TextPtr out, A7CRef cstr ) {
     A7Size capacity;
     A7TextPtr const ref = out; /* alias for reading only */
 
@@ -97,6 +100,6 @@ void a7_text_delete( A7TextPtr out ) {
     *out = a7_text_init( );
 }
 
-A7Size a7_text_capacity( A7TextPtr const ref ) {
+A7Size a7_text_capacity( A7TextRef ref ) {
     return ( A7_TEXT_SMALL_SIZE < ref->size_ ) ? ref->impl_.large.held : A7_TEXT_SMALL_SIZE;
 }
