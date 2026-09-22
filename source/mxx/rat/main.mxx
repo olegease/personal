@@ -3,12 +3,15 @@ import std;
 #else
 #include <cstddef> // `size_t`
 #include <exception> // `exception`
-#include <filesystem> // `path`, `canonical`
+#include <filesystem> // `filesystem:path,canonical`
 #include <fstream> // `ifstream`
 #include <iostream> // `cerr`
 #include <print> // `println`
+#include <ranges> // `views:enumerate`
 #include <stdexcept> // `runtime_error`
 #include <string> // `string`
+#include <string_view> // `string_view`
+#include <vector> // `vector`
 #endif//APP_INCLUDE_STD
 
 namespace fs = std::filesystem;
@@ -24,9 +27,17 @@ namespace app {
     using Catch = Ref< std::exception >;
     using InputFile = std::ifstream;
     using Size = std::size_t;
+    using Char = char;
     using Text = std::string;
+    using View = std::string_view;
+    template< typename Type > using Grow = std::vector< Type >;
+    using GrowViews = Grow< View >;
+    using std::views::enumerate;
+
+    static constexpr Char New_Line = '\n';
 
     Text file_contents( Out< InputFile > file );
+    GrowViews contents_to_lines( Ref< Text > text );
 }
 
 int main( int argc, char *argv[] ) try {
@@ -43,11 +54,13 @@ int main( int argc, char *argv[] ) try {
 
     InputFile file{ path, std::ios::binary };
 
-    if ( not file.is_open( ) ) throw std::runtime_error{ "cannot open file" };
+    if ( not file.is_open( )) throw std::runtime_error{ "cannot open file" };
 
     Text contents = app::file_contents( file );
+    if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
+    GrowViews lines = contents_to_lines( contents );
 
-    println( "{}", contents );
+    for ( auto line : lines ) println( "{}", line );
 
     file.close( );
 } catch ( app::Catch e ) {
@@ -58,9 +71,23 @@ int main( int argc, char *argv[] ) try {
 
 namespace app {
 
-    Text file_contents( Out< InputFile > file ) {
+    Text
+    file_contents( Out< InputFile > file ) {
         using It = std::istreambuf_iterator< typename InputFile::char_type >;
         return Text{ It{ file }, It{ }};
+    }
+    GrowViews
+    contents_to_lines( Ref< Text > text ) {
+        GrowViews lines;
+        lines.reserve( text.size( ) >> 8u );
+
+        Size prevIndex = 0;
+        for ( auto [currIndex, c] : enumerate( text )) {
+            if ( c != New_Line ) continue;
+            lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64, currIndex - prevIndex ));
+            prevIndex = currIndex + 1;
+        }
+        return lines;
     }
 
 }
