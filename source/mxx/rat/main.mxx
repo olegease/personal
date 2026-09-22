@@ -18,7 +18,7 @@ namespace app {
     using fs::canonical;
     using fs::file_size;
     using Path = fs::path;
-    using Catch = std::exception const &;
+    using Catch = Ref< std::exception >;
     using InputFile = std::ifstream;
     using Size = std::size_t;
 }
