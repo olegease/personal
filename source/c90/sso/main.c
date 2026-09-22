@@ -1,19 +1,36 @@
+/* sso - small string optimization */
 #include <stdlib.h> /* malloc */
 #include <stdio.h> /* printf */
 #include <string.h> /* strlen */
-
-
-/* sso - small string optimization */
+/* face */
+/* -- macros */
 #define A7_TEXT_SMALL_SIZE 16
 
+#define A7_TEXT_INIT( pname ) \
+    struct A7Text pname = a7_text_init( )
+
+#define A7_TEXT_INIT_2( p1, p2 ) \
+    A7_TEXT_INIT( p1 );\
+    A7_TEXT_INIT( p2 )
+
+#define A7_TEXT_INIT_4( p1, p2, p3, p4 ) \
+    A7_TEXT_INIT2( p1, p2 );\
+    A7_TEXT_INIT2( p3, p4 )
+
+#define A7_TEXT_INIT_8( p1, p2, p3, p4, p5, p6, p7, p8 ) \
+    A7_TEXT_INIT4( p1, p2, p3, p4 );\
+    A7_TEXT_INIT4( p5, p6, p7, p8 )
+/* -- c typedefs */
 typedef char A7Char;
 typedef char *A7CPtr;
 typedef void *A7VPtr;
 typedef char const *A7CRef;
 typedef unsigned long A7Size;
-
-/* NOTE: size includes null character, cannot be passed as value type */
+/* -- structs */
 struct A7Text {
+    /* NOTE: size includes null character, should not be passed as value type
+     * \ or modified directly, only reading of `data_` and `size_` is allowed
+     */
     union {
         struct {
             A7Char buff[A7_TEXT_SMALL_SIZE];
@@ -26,49 +43,47 @@ struct A7Text {
     A7CPtr data_;
     A7Size size_;
 };
-
-
+/* -- text typedefs */
 typedef struct A7Text *A7TextPtr;
 typedef struct A7Text const *A7TextRef;
-
+/* -- static */
+static struct A7Text const A7_Text_Zeroed; /* NOTE: never pass it as pointer or change its data */
+/* -- functions */
 A7Size a7_text_error_size( void );
 struct A7Text a7_text_init( void );
 A7Size a7_text_create( A7TextPtr out, A7CRef cstr );
 void a7_text_delete( A7TextPtr out );
 A7Size a7_text_capacity( A7TextRef ref );
-/* NOTE: never pass it as pointer or change its data */
-static struct A7Text const A7_Text_Zeroed;
-
+/* main */
 int main( void ) {
-
-    struct A7Text textSmall, textLarge = a7_text_init( );
-
+    A7Size textSmallCap, textLargeCap;
     A7CRef small = "small";
     A7CRef large = "large-large-large";
-    A7Size textSmallSize = a7_text_create( &textSmall, small );
-    A7Size textLargeSize = a7_text_create( &textLarge, large );
+    A7_TEXT_INIT_2( textSmall, textLarge );
+    textSmallCap = a7_text_create( &textSmall, small );
+    textLargeCap = a7_text_create( &textLarge, large );
 
     printf( "%s\n", small );
     printf( "%s\n", large );
 
-    printf( "%ld:%ld %s\n", textSmall.size_, textSmallSize, textSmall.data_ );
-    printf( "%ld:%ld %s\n", textLarge.size_, textLargeSize, textLarge.data_ );
+    printf( "%ld:%ld %s\n", textSmall.size_, textSmallCap, textSmall.data_ );
+    printf( "%ld:%ld %s\n", textLarge.size_, textLargeCap, textLarge.data_ );
 
     a7_text_delete( &textLarge );
 
     return 0;
 }
-
-
+/* impl */
+/* -- functions */
 struct A7Text a7_text_init( void ) {
     return A7_Text_Zeroed;
 }
-
-A7Size a7_text_error_size( void ) {
+A7Size
+a7_text_error_size( void ) {
     return -1u;
 }
-
-A7Size a7_text_create( A7TextPtr out, A7CRef cstr ) {
+A7Size
+a7_text_create( A7TextPtr out, A7CRef cstr ) {
     A7Size capacity;
     A7TextPtr const ref = out; /* alias for reading only */
 
@@ -94,12 +109,12 @@ A7Size a7_text_create( A7TextPtr out, A7CRef cstr ) {
 
     return capacity;
 }
-
-void a7_text_delete( A7TextPtr out ) {
+void
+a7_text_delete( A7TextPtr out ) {
     if ( A7_TEXT_SMALL_SIZE < out->size_ ) free( out->data_ );
     *out = a7_text_init( );
 }
-
-A7Size a7_text_capacity( A7TextRef ref ) {
+A7Size
+a7_text_capacity( A7TextRef ref ) {
     return ( A7_TEXT_SMALL_SIZE < ref->size_ ) ? ref->impl_.large.held : A7_TEXT_SMALL_SIZE;
 }
