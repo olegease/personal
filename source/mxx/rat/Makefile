@@ -1,4 +1,4 @@
-.PHONY: usage start gencc build
+.PHONY: usage start gencc debug build clean
 
 FOLDER := $(shell pwd)
 CCJSON := compile_commands.json
@@ -21,16 +21,19 @@ gencc:
 	@echo -e '\t"file": "$(SOURCE)"' >> $(CCJSON)
 	@echo -e "}]" >> $(CCJSON)
 
+debug: $(TARGET)
+	@gdb $(TARGET)
+
 build: $(TARGET)
 
-start: $(TARGET)
-	@./$(TARGET)
-
 $(TARGET): $(OBJECT)
-	g++ -std=c++23 $(IMPOBJ) $(OBJECT) -o $(TARGET)
+	g++ -g -std=c++23 $(IMPOBJ) $(OBJECT) -o $(TARGET)
 
 $(OBJECT): $(SOURCE) $(IMPOBJ)
-	g++ -std=c++23 -fmodules -c -x c++ $(SOURCE) -o $(OBJECT)
+	g++ -g -std=c++23 -fmodules -c -x c++ $(SOURCE) -o $(OBJECT)
 
 $(IMPOBJ): $(IMPORT)
-	g++ -std=c++23 -fmodules -c $(IMPORT) -o $(IMPOBJ)
+	g++ -g -std=c++23 -fmodules -c $(IMPORT) -o $(IMPOBJ)
+
+clean: 
+	@rm -f $(TARGET) $(OBJECT) $(IMPOBJ)

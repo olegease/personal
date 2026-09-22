@@ -8,12 +8,15 @@ import std;
 #include <iostream> // `cerr`
 #include <print> // `println`
 #include <stdexcept> // `runtime_error`
+#include <string> // `string`
 #endif//APP_INCLUDE_STD
 
 namespace fs = std::filesystem;
 
 namespace app {
+    template< typename Type > using Out = Type &;
     template< typename Type > using Ref = Type const &;
+
     using std::println;
     using fs::canonical;
     using fs::file_size;
@@ -21,6 +24,9 @@ namespace app {
     using Catch = Ref< std::exception >;
     using InputFile = std::ifstream;
     using Size = std::size_t;
+    using Text = std::string;
+
+    Text file_contents( Out< InputFile > file );
 }
 
 int main( int argc, char *argv[] ) try {
@@ -34,15 +40,27 @@ int main( int argc, char *argv[] ) try {
     println( "path: {}", canonical( path ).string( ));
 
     Size fileSize = file_size( path );
-    println ("file size: {}", fileSize );
 
     InputFile file{ path, std::ios::binary };
 
     if ( not file.is_open( ) ) throw std::runtime_error{ "cannot open file" };
+
+    Text contents = app::file_contents( file );
+
+    println( "{}", contents );
 
     file.close( );
 } catch ( app::Catch e ) {
     std::println( std::cerr, "std::exception: {}", e.what( ));
 } catch ( ... ) {
     std::println( std::cerr, "... exception" );
+}
+
+namespace app {
+
+    Text file_contents( Out< InputFile > file ) {
+        using It = std::istreambuf_iterator< typename InputFile::char_type >;
+        return Text{ It{ file }, It{ }};
+    }
+
 }
