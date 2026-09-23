@@ -8,6 +8,7 @@ import std;
 #include <iostream> // `cerr`
 #include <print> // `println`
 #include <ranges> // `views:enumerate`
+#include <span> // `span`
 #include <stdexcept> // `runtime_error`
 #include <string> // `string`
 #include <string_view> // `string_view`
@@ -17,11 +18,12 @@ import std;
 namespace fs = std::filesystem;
 
 namespace app {
+    using namespace std::string_view_literals;
+    template< typename Type > using Ptr = Type *;
     template< typename Type > using Out = Type &;
     template< typename Type > using Ref = Type const &;
 
     using std::println;
-    using fs::canonical;
     using fs::file_size;
     using Path = fs::path;
     using Catch = Ref< std::exception >;
@@ -30,6 +32,8 @@ namespace app {
     using Char = char;
     using Text = std::string;
     using View = std::string_view;
+    using Args = std::span< Ptr< char >>;
+    using Error = std::runtime_error;
     template< typename Type > using Grow = std::vector< Type >;
     using GrowViews = Grow< View >;
     using std::views::enumerate;
@@ -38,36 +42,58 @@ namespace app {
 
     Text file_contents( Out< InputFile > file );
     GrowViews contents_to_lines( Ref< Text > text );
+
+    struct App {
+        GrowViews fileNames;
+        Size currLine{ 1 };
+        bool isShowNumbers{ };
+    };
+
+    void print_lines( Out< App > appOut, Out< InputFile > file );
 }
 
 int main( int argc, char *argv[] ) try {
     using namespace app;
-    println( "rats: Random Assets Tearing" );
-    println( "\targc: {}, argv[0]: {}", argc, argv[0] );
 
-    if ( argc != 2 ) throw std::runtime_error( "only works with two arguments" );
+    App appOut{ }; // use write only
+    Ref< App > app = appOut; // use to read only
 
-    Path path{ argv[1] };
-    println( "path: {}", canonical( path ).string( ));
+    auto arg_size1 = [&appOut]( Char c ) {
+        switch ( c ) {
+            case 'n': appOut.isShowNumbers = true; break;
+            default: throw Error{ "not supported one sized argument: " + Text{ c }};
+        }
+    };
 
-    Size fileSize = file_size( path );
+    Args args{ argv + 1, argc - 1u };
+    for ( View arg : args ) {
+        if ( arg[0] == '-' ) {
+            Size argSize = arg.size( );
+            switch ( argSize ) {
+                case 2: arg_size1( arg[1] ); continue;
+                default: throw Error{ "not supported " + Text{ arg }};
+            }
+        }
+        appOut.fileNames.push_back( arg );
+    }
 
-    InputFile file{ path, std::ios::binary };
+    for ( View fileName : app.fileNames ) {
+        Path path{ fileName };
 
-    if ( not file.is_open( )) throw std::runtime_error{ "cannot open file" };
+        Size fileSize = file_size( path );
 
-    Text contents = app::file_contents( file );
-    if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
-    GrowViews lines = contents_to_lines( contents );
+        InputFile file{ path, std::ios::binary };
+        if ( not file.is_open( )) throw std::runtime_error{ "cannot open file" + Text{ path.string( ) } };
 
-    for ( auto line : lines ) println( "{}", line );
+        print_lines( appOut, file );
+        file.close( );
+    }
 
-    file.close( );
 } catch ( app::Catch e ) {
     std::println( std::cerr, "std::exception: {}", e.what( ));
 } catch ( ... ) {
     std::println( std::cerr, "... exception" );
-}
+} // main try
 
 namespace app {
 
@@ -90,4 +116,18 @@ namespace app {
         return lines;
     }
 
-}
+    void
+    print_lines( Out< App > appOut, Out< InputFile > file ) {
+        auto const app = appOut;
+        Text contents = app::file_contents( file );
+        if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
+        GrowViews lines = contents_to_lines( contents );
+        if ( app.isShowNumbers ) {
+            for ( auto [curr,line]: enumerate( lines ) ) println( "{:6d}\t{}", curr + app.currLine, line );
+            appOut.currLine += lines.size( );
+        } else [[likely]] {
+            for ( auto line: lines ) println( "{}", line );
+        }
+    }
+
+} // namespace app `impl`
