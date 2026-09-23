@@ -1,3 +1,4 @@
+#include <cassert>
 #ifndef APP_INCLUDE_STD
 import std;
 #else
@@ -7,12 +8,14 @@ import std;
 #include <fstream> // `ifstream`
 #include <iostream> // `cerr`
 #include <print> // `println`
+#include <random> // `random_device`
 #include <ranges> // `views:enumerate`
 #include <span> // `span`
 #include <stdexcept> // `runtime_error`
 #include <string> // `string`
 #include <string_view> // `string_view`
 #include <vector> // `vector`
+
 #endif//APP_INCLUDE_STD
 
 namespace fs = std::filesystem;
@@ -44,9 +47,29 @@ namespace app {
     GrowViews contents_to_lines( Ref< Text > text );
 
     struct App {
+        static inline constexpr unsigned Show_Line_Threshold = 20;
         GrowViews fileNames;
         Size currLine{ 1 };
         bool isShowNumbers{ };
+
+        static bool is_show_line( unsigned threshold = Show_Line_Threshold ) {
+            return Random::percent( ) <= threshold;
+        }
+        static void apply_seed( unsigned seed ) {
+            static bool applied = false;
+            assert( not applied and "apllied seed twice!" );
+            Random::generator_.seed( seed );
+            applied = true;
+        }
+    private:
+        struct Random {
+            static inline std::random_device device_;
+            static inline std::mt19937 generator_{ device_( )};
+            static inline std::uniform_int_distribution< unsigned > percent_{ 1, 100 };
+            static unsigned percent( ) {
+                return percent_( generator_ );
+            }
+        };
     };
 
     void print_lines( Out< App > appOut, Out< InputFile > file );
@@ -123,10 +146,18 @@ namespace app {
         if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
         GrowViews lines = contents_to_lines( contents );
         if ( app.isShowNumbers ) {
-            for ( auto [curr,line]: enumerate( lines ) ) println( "{:6d}\t{}", curr + app.currLine, line );
+            for ( auto [curr,line]: enumerate( lines ) ) {
+                if ( App::is_show_line( ) ) {
+                    println( "{:6d}\t{}", curr + app.currLine, line );
+                }
+            }
             appOut.currLine += lines.size( );
         } else [[likely]] {
-            for ( auto line: lines ) println( "{}", line );
+            for ( auto line: lines ) {
+                if ( App::is_show_line( ) ) {
+                    println( "{}", line );
+                }
+            }
         }
     }
 
