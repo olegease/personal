@@ -7,17 +7,18 @@ SOURCE := $(FOLDER)/main.mxx
 OBJECT := $(FOLDER)/main.obj
 IMPORT := /usr/include/c++/16/bits/std.cc
 IMPOBJ := $(FOLDER)/stdmodule.o
+CFLAGS := -g -std=c++23
+JFLAGS := -std=c++23 -c -x c++ -DAPP_INCLUDE_STD
 
 usage:
 	@echo 'usage: make [command]'
 	@echo 'gencc: generate compile commands json'
 	@echo 'build: with c++23 g++ modules import std'
-	@echo 'start: run `rat` applciation'
 
 gencc:
 	@echo -e "[{" > $(CCJSON)
 	@echo -e '\t"directory": "$(FOLDER)",' >> $(CCJSON)
-	@echo -e '\t"command": "clang++ -std=c++23 -c -x c++ -DAPP_INCLUDE_STD",' >> $(CCJSON)
+	@echo -e '\t"command": "clang++ $(JFLAGS)",' >> $(CCJSON)
 	@echo -e '\t"file": "$(SOURCE)"' >> $(CCJSON)
 	@echo -e "}]" >> $(CCJSON)
 
@@ -27,13 +28,13 @@ debug: $(TARGET)
 build: $(TARGET)
 
 $(TARGET): $(OBJECT)
-	g++ -g -std=c++23 $(IMPOBJ) $(OBJECT) -o $(TARGET)
+	g++ $(CFLAGS) $(IMPOBJ) $(OBJECT) -o $(TARGET)
 
 $(OBJECT): $(SOURCE) $(IMPOBJ)
-	g++ -g -std=c++23 -fmodules -c -x c++ $(SOURCE) -o $(OBJECT)
+	g++ $(CFLAGS) -fmodules -c -x c++ $(SOURCE) -o $(OBJECT)
 
 $(IMPOBJ): $(IMPORT)
-	g++ -g -std=c++23 -fmodules -c $(IMPORT) -o $(IMPOBJ)
+	g++ $(CFLAGS) -fmodules -c $(IMPORT) -o $(IMPOBJ)
 
 clean: 
 	@rm -f $(TARGET) $(OBJECT) $(IMPOBJ)

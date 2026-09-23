@@ -4,7 +4,8 @@ import std;
 #else
 #include <cstddef> // `size_t`
 #include <exception> // `exception`
-#include <filesystem> // `filesystem:path,canonical`
+#include <filesystem> // `filesystem:path`
+#include <format> // `format`
 #include <fstream> // `ifstream`
 #include <iostream> // `cerr`
 #include <print> // `println`
@@ -27,6 +28,7 @@ namespace app {
     template< typename Type > using Ref = Type const &;
 
     using std::println;
+    using std::format;
     using fs::file_size;
     using Path = fs::path;
     using Catch = Ref< std::exception >;
@@ -47,7 +49,7 @@ namespace app {
     GrowViews contents_to_lines( Ref< Text > text );
 
     struct App {
-        static inline constexpr unsigned Show_Line_Threshold = 20;
+        static inline constexpr unsigned Show_Line_Threshold = 20u;
         GrowViews fileNames;
         Size currLine{ 1 };
         bool isShowNumbers{ };
@@ -84,7 +86,7 @@ int main( int argc, char *argv[] ) try {
     auto arg_size1 = [&appOut]( Char c ) {
         switch ( c ) {
             case 'n': appOut.isShowNumbers = true; break;
-            default: throw Error{ "not supported one sized argument: " + Text{ c }};
+            default: throw Error{ format( "not supported one sized argument: {}", c )};
         }
     };
 
@@ -94,7 +96,7 @@ int main( int argc, char *argv[] ) try {
             Size argSize = arg.size( );
             switch ( argSize ) {
                 case 2: arg_size1( arg[1] ); continue;
-                default: throw Error{ "not supported " + Text{ arg }};
+                default: throw Error{ format( "not supported arg: ", arg )};
             }
         }
         appOut.fileNames.push_back( arg );
@@ -106,7 +108,7 @@ int main( int argc, char *argv[] ) try {
         Size fileSize = file_size( path );
 
         InputFile file{ path, std::ios::binary };
-        if ( not file.is_open( )) throw std::runtime_error{ "cannot open file" + Text{ path.string( ) } };
+        if ( not file.is_open( )) throw Error{ format( "cannot open file: {}", path.string( ))};
 
         print_lines( appOut, file );
         file.close( );
@@ -128,35 +130,44 @@ namespace app {
     GrowViews
     contents_to_lines( Ref< Text > text ) {
         GrowViews lines;
-        lines.reserve( text.size( ) >> 8u );
+        lines.reserve( std::max< Size >( text.size( ) >> 8u, 8u ));
 
         Size prevIndex = 0;
         for ( auto [currIndex, c] : enumerate( text )) {
             if ( c != New_Line ) continue;
-            lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64, currIndex - prevIndex ));
+            lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64u, currIndex - prevIndex ));
             prevIndex = currIndex + 1;
         }
+
         return lines;
     }
 
     void
     print_lines( Out< App > appOut, Out< InputFile > file ) {
         auto const app = appOut;
+
+        auto print_number_line = [&app]( long num, View line ) {
+            if ( App::is_show_line( )) {
+                println( "{:6d}\t{}", num + app.currLine, line );
+            }
+        };
+        auto print_line = []( View line ) {
+            if ( App::is_show_line( )) {
+                println( "{}", line );
+            }
+        };
+
         Text contents = app::file_contents( file );
         if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
         GrowViews lines = contents_to_lines( contents );
         if ( app.isShowNumbers ) {
-            for ( auto [curr,line]: enumerate( lines ) ) {
-                if ( App::is_show_line( ) ) {
-                    println( "{:6d}\t{}", curr + app.currLine, line );
-                }
+            for ( auto [curr,line]: enumerate( lines )) {
+                print_number_line( curr, line );
             }
             appOut.currLine += lines.size( );
         } else [[likely]] {
             for ( auto line: lines ) {
-                if ( App::is_show_line( ) ) {
-                    println( "{}", line );
-                }
+                print_line( line );
             }
         }
     }
