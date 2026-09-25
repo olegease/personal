@@ -8,3 +8,6 @@ build:
 
 start:
 	@./a.out
+
+clean:
+	@rm ./*.out
