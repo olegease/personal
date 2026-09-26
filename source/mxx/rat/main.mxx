@@ -11,6 +11,7 @@ namespace app {
 
     using std::println;
     using std::format;
+    using std::from_chars;
     using fs::file_size;
     using Path = fs::path;
     using Catch = Ref< std::exception >;
@@ -21,25 +22,31 @@ namespace app {
     using View = std::string_view;
     using Args = std::span< Ptr< char >>;
     using Error = std::runtime_error;
+    using ErrorCode = std::errc;
     template< typename Type > using Grow = std::vector< Type >;
     using GrowViews = Grow< View >;
-    // using std::views::enumerate; TODO: change to when clangd support it
-    using std::views::iota;
-    using std::views::zip;
+    // using std::views::enumerate; TODO: change to when `libc++` 23 arrive
     static constexpr Char New_Line = '\n';
-
-    Text file_contents( Out< InputFile > file );
-    GrowViews contents_to_lines( Ref< Text > text );
+    static constexpr auto Error_Zero = ErrorCode{ };
 
     struct App {
+        // TODO: default value, add command-line argument to change
         static inline constexpr unsigned Show_Line_Threshold = 20u;
         GrowViews fileNames;
-        Size currLine{ 1 };
+        Size currLine{ 1u };
+        unsigned showThreashold{ Show_Line_Threshold };
         bool isShowNumbers{ };
 
-        static bool is_show_line( unsigned threshold = Show_Line_Threshold ) {
-            return Random::percent( ) <= threshold;
+        enum class ArgState : unsigned {
+            Default, Expect_Percent
+        };
+
+        ArgState argState{ };
+
+        bool is_show_line( ) const {
+            return Random::percent( ) <= showThreashold;
         }
+        // TODO: add command-line argument to pass seed
         static void apply_seed( unsigned seed ) {
             static bool applied = false;
             assert( not applied and "apllied seed twice!" );
@@ -57,7 +64,7 @@ namespace app {
         };
     };
 
-    void print_lines( Out< App > appOut, Out< InputFile > file );
+    static void print_lines( Out< App > appOut, Ref< Text > file );
 }
 
 int main( int argc, char *argv[] ) try {
@@ -69,16 +76,32 @@ int main( int argc, char *argv[] ) try {
     auto arg_size1 = [&appOut]( Char c ) {
         switch ( c ) {
             case 'n': appOut.isShowNumbers = true; break;
+            case 'P': appOut.showThreashold = 100; appOut.argState = App::ArgState::Expect_Percent; break;
             default: throw Error{ format( "not supported one sized argument: {}", c )};
         }
     };
 
     Args args{ argv + 1, argc - 1u };
     for ( View arg : args ) {
+        auto parse_percent = []( View arg, Out< unsigned > percent ) -> bool {
+            unsigned value;
+            auto [ptr,errorCode] = from_chars( arg.data( ), arg.data( ) + arg.size( ), value );
+            if ( errorCode != Error_Zero or ptr != arg.data( ) + arg.size( ) or 100u < value ) { return false; }
+            percent = value;
+            return true;
+        };
+
+        switch ( app.argState ) {
+        case App::ArgState::Expect_Percent:
+            if ( parse_percent( arg, appOut.showThreashold )) continue; else break;
+            default: break;
+        }
+        appOut.argState = App::ArgState::Default;
+
         if ( arg[0] == '-' ) {
             Size argSize = arg.size( );
             switch ( argSize ) {
-                case 2: arg_size1( arg[1] ); continue;
+            case 2: arg_size1( arg[1] ); continue;
                 default: throw Error{ format( "not supported arg: ", arg )};
             }
         }
@@ -87,14 +110,18 @@ int main( int argc, char *argv[] ) try {
 
     for ( View fileName : app.fileNames ) {
         Path path{ fileName };
-
         Size fileSize = file_size( path );
-
-        InputFile file{ path, std::ios::binary };
-        if ( not file.is_open( )) throw Error{ format( "cannot open file: {}", path.string( ))};
-
-        print_lines( appOut, file );
-        file.close( );
+        Text contents;
+        { // NOTE: nested block to close file automatically
+            InputFile file{ path };
+            if ( not file.is_open( )) throw Error{ format( "cannot open file: {}", path.string( ))};
+            contents.resize_and_overwrite( fileSize, [&file]( Ptr< InputFile::char_type > buff, Size count ) {
+                file.read( buff, count );
+                return file.gcount( );
+            });
+        }
+        if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
+        print_lines( appOut, contents );
     }
 
 } catch ( app::Catch e ) {
@@ -105,18 +132,14 @@ int main( int argc, char *argv[] ) try {
 
 namespace app {
 
-    Text
-    file_contents( Out< InputFile > file ) {
-        using It = std::istreambuf_iterator< typename InputFile::char_type >;
-        return Text{ It{ file }, It{ }};
-    }
-    GrowViews
-    contents_to_lines( Ref< Text > text ) {
+    static auto
+    contents_to_lines( Ref< Text > text ) -> GrowViews {
         GrowViews lines;
         lines.reserve( std::max< Size >( text.size( ) >> 8u, 8u ));
 
         Size prevIndex = 0;
         // TODO: change to enumerate when clang supported
+        using std::views::iota, std::views::zip;
         for ( auto [currIndex, c] : zip( iota( 0 ), text )) {
             if ( c != New_Line ) continue;
             lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64u, currIndex - prevIndex ));
@@ -126,26 +149,25 @@ namespace app {
         return lines;
     }
 
-    void
-    print_lines( Out< App > appOut, Out< InputFile > file ) {
+    static void
+    print_lines( Out< App > appOut, Ref< Text > contents ) {
         auto const app = appOut;
 
         auto print_number_line = [&app]( long num, View line ) {
-            if ( App::is_show_line( )) {
+            if ( app.is_show_line( )) {
                 println( "{:6d}\t{}", num + app.currLine, line );
             }
         };
-        auto print_line = []( View line ) {
-            if ( App::is_show_line( )) {
+        auto print_line = [&app]( View line ) {
+            if ( app.is_show_line( )) {
                 println( "{}", line );
             }
         };
 
-        Text contents = app::file_contents( file );
-        if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
         GrowViews lines = contents_to_lines( contents );
         if ( app.isShowNumbers ) {
-            // TODO: change to enumerate when clang supported
+            // TODO: change to enumerate when `libc++` 23 arrive
+            using std::views::iota, std::views::zip;
             for ( auto [curr,line]: zip( iota( 0 ), lines )) {
                 print_number_line( curr, line );
             }

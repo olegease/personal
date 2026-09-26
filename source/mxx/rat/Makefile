@@ -6,7 +6,7 @@ SOURCE := $(FOLDER)/main.mxx
 OBJECT := $(FOLDER)/main.obj
 IMPORT := /usr/include/c++/16/bits/std.cc
 IMPOBJ := $(FOLDER)/stdmodule.o
-CFLAGS := -g -std=c++23
+CFLAGS := -g -std=c++23 -Wall -Wextra
 
 usage:
 	@echo 'usage: make [command]'
