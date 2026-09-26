@@ -1,26 +1,18 @@
-.PHONY: usage start gencc debug build clean
+.PHONY: usage start debug build clean
 
 FOLDER := $(shell pwd)
-CCJSON := compile_commands.json
 TARGET := rat.out
 SOURCE := $(FOLDER)/main.mxx
 OBJECT := $(FOLDER)/main.obj
 IMPORT := /usr/include/c++/16/bits/std.cc
 IMPOBJ := $(FOLDER)/stdmodule.o
 CFLAGS := -g -std=c++23
-JFLAGS := -std=c++23 -c -x c++ -DAPP_INCLUDE_STD
 
 usage:
 	@echo 'usage: make [command]'
-	@echo 'gencc: generate compile commands json'
 	@echo 'build: with c++23 g++ modules import std'
-
-gencc:
-	@echo -e "[{" > $(CCJSON)
-	@echo -e '\t"directory": "$(FOLDER)",' >> $(CCJSON)
-	@echo -e '\t"command": "clang++ $(JFLAGS)",' >> $(CCJSON)
-	@echo -e '\t"file": "$(SOURCE)"' >> $(CCJSON)
-	@echo -e "}]" >> $(CCJSON)
+	@echo 'debug: with gdb'
+	@echo 'clean: remove build artifacts'
 
 debug: $(TARGET)
 	@gdb $(TARGET)

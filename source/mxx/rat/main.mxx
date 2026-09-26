@@ -1,28 +1,10 @@
 #include <cassert>
-#ifndef APP_INCLUDE_STD
 import std;
-#else
-#include <cstddef> // `size_t`
-#include <exception> // `exception`
-#include <filesystem> // `filesystem:path`
-#include <format> // `format`
-#include <fstream> // `ifstream`
-#include <iostream> // `cerr`
-#include <print> // `println`
-#include <random> // `random_device`
-#include <ranges> // `views:enumerate`
-#include <span> // `span`
-#include <stdexcept> // `runtime_error`
-#include <string> // `string`
-#include <string_view> // `string_view`
-#include <vector> // `vector`
-
-#endif//APP_INCLUDE_STD
 
 namespace fs = std::filesystem;
 
 namespace app {
-    using namespace std::string_view_literals;
+    //using namespace std::string_view_literals;
     template< typename Type > using Ptr = Type *;
     template< typename Type > using Out = Type &;
     template< typename Type > using Ref = Type const &;
@@ -41,8 +23,9 @@ namespace app {
     using Error = std::runtime_error;
     template< typename Type > using Grow = std::vector< Type >;
     using GrowViews = Grow< View >;
-    using std::views::enumerate;
-
+    // using std::views::enumerate; TODO: change to when clangd support it
+    using std::views::iota;
+    using std::views::zip;
     static constexpr Char New_Line = '\n';
 
     Text file_contents( Out< InputFile > file );
@@ -133,7 +116,8 @@ namespace app {
         lines.reserve( std::max< Size >( text.size( ) >> 8u, 8u ));
 
         Size prevIndex = 0;
-        for ( auto [currIndex, c] : enumerate( text )) {
+        // TODO: change to enumerate when clang supported
+        for ( auto [currIndex, c] : zip( iota( 0 ), text )) {
             if ( c != New_Line ) continue;
             lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64u, currIndex - prevIndex ));
             prevIndex = currIndex + 1;
@@ -161,7 +145,8 @@ namespace app {
         if ( contents.back( ) != New_Line ) contents.push_back( New_Line );
         GrowViews lines = contents_to_lines( contents );
         if ( app.isShowNumbers ) {
-            for ( auto [curr,line]: enumerate( lines )) {
+            // TODO: change to enumerate when clang supported
+            for ( auto [curr,line]: zip( iota( 0 ), lines )) {
                 print_number_line( curr, line );
             }
             appOut.currLine += lines.size( );
