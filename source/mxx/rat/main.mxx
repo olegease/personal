@@ -25,7 +25,7 @@ namespace app {
     using ErrorCode = std::errc;
     template< typename Type > using Grow = std::vector< Type >;
     using GrowViews = Grow< View >;
-    // using std::views::enumerate; TODO: change to when `libc++` 23 arrive
+    using std::views::enumerate;
     static constexpr Char New_Line = '\n';
     static constexpr auto Error_Zero = ErrorCode{ };
 
@@ -138,9 +138,7 @@ namespace app {
         lines.reserve( std::max< Size >( text.size( ) >> 8u, 8u ));
 
         Size prevIndex = 0;
-        // TODO: change to enumerate when clang supported
-        using std::views::iota, std::views::zip;
-        for ( auto [currIndex, c] : zip( iota( 0 ), text )) {
+        for ( auto [currIndex, c] : enumerate( text )) {
             if ( c != New_Line ) continue;
             lines.emplace_back( text.data( ) + prevIndex, std::min< Size >( 64u, currIndex - prevIndex ));
             prevIndex = currIndex + 1;
@@ -166,9 +164,7 @@ namespace app {
 
         GrowViews lines = contents_to_lines( contents );
         if ( app.isShowNumbers ) {
-            // TODO: change to enumerate when `libc++` 23 arrive
-            using std::views::iota, std::views::zip;
-            for ( auto [curr,line]: zip( iota( 0 ), lines )) {
+            for ( auto [curr,line]: enumerate( lines )) {
                 print_number_line( curr, line );
             }
             appOut.currLine += lines.size( );
