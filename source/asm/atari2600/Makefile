@@ -1,10 +1,11 @@
 INC := /usr/local/include/atari2600
-OUT := cart.bin
+NAME := cart
+OUT := $(NAME).bin
 
 usage:
 	@echo "make [command]"
 template:
-	dasm template.s -f3 -v0 -I$(INC) -o$(OUT)
+	dasm template.s -f3 -v0 -I$(INC) -o$(OUT) -s$(NAME).sym -l$(NAME).lst
 verpmv:
 	dasm verpmv.s -f3 -v0 -I$(INC) -o$(OUT)
 horpmv:

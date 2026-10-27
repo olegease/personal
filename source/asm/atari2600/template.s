@@ -1,12 +1,18 @@
         processor 6502
         ; includes
+        ; -- system
         include "macro.h"
         include "vcs.h"
+        ; -- local
+        include "define.h"
         ; constants
-NTSC_VISIBLE = 192              ;
-NTSC_OVERSCAN = 30              ;
-NTSC_VSYNC = 3                  ;
-NTSC_BLANK = 36                 ; NOTE: borrowed one line for visible lines
+Lines_Visible = NTSC_Visible    ;
+Lines_Overscan = NTSC_Overscan  ;
+Lines_Vsync = NTSC_Vsync        ;
+Lines_Blank = NTSC_Blank        ;
+Lines_Kernel = 1                ;
+        ; -- kernel draw size, NOTE: so each draw cycle including first would have same cycles
+Kernel_Loop = Lines_Visible - 2 * Lines_Kernel
         ; RAM
         seg.u data              ;
         org $80                 ;
@@ -20,36 +26,46 @@ TwoPosY         .byte           ;
         org $F000               ;
 Reset:                          ;
         CLEAN_START             ;
-        lda #$02                ;
+        lda #Black_1            ;
         sta COLUBK              ;
 Frame:                          ;
         sta WSYNC               ;
-        lda #%00000000          ;
+        lda #Turn_Off           ;
         sta VBLANK              ;
-        ldy #NTSC_VISIBLE       ;
-        jsr y_wsync_loop_       ; TODO: add kernel to handle 192 scan lines
-        ; kernel logic before turning on `VBLANK`
-        lda #%00000010          ;
+        REPEAT Lines_Kernel - 1 ;
+        sta WSYNC               ;
+        REPEND                  ;
+        ldx #Kernel_Loop        ;
+.kernelLoop:                    ; TODO: write kernel logic
+        REPEAT Lines_Kernel     ;
+        sta WSYNC               ;
+        dex                     ;
+        REPEND                  ;
+        bne .kernelLoop         ;
+        REPEAT Lines_Kernel;
+        sta WSYNC               ;
+        REPEND                  ;
+        lda #Turn_On            ;
         sta VBLANK              ;
         jsr _ntsc_overscan_     ; 30 scan lines for physics
         jsr _ntsc_vsync_        ; 3 scan lines for synchronize vertical sync
         jsr _ntsc_blank_        ; 37 scan lines for graphics
         jmp Frame               ;
         ; -- subroutines
-_ntsc_overscan_ SUBROUTINE      ;
-        ldy #NTSC_OVERSCAN      ;
+_ntsc_overscan_ SUBROUTINE      ; TODO: write physics logic
+        ldy #Lines_Overscan     ;
         jsr y_wsync_loop_       ;
         rts                     ;
-_ntsc_vsync_ SUBROUTINE         ;
-        lda #%00000010          ;
+_ntsc_vsync_ SUBROUTINE         ; NOTE: do not touch
+        lda #Turn_On            ;
         sta VSYNC               ;
-        ldy #NTSC_VSYNC         ;
+        ldy #Lines_Vsync;
         jsr y_wsync_loop_       ;
-        lda #%00000000          ;
+        lda #Turn_Off           ;
         sta VSYNC               ;
         rts                     ;
-_ntsc_blank_ SUBROUTINE         ;
-        ldy #NTSC_BLANK         ;
+_ntsc_blank_ SUBROUTINE         ; TODO: write graphic logic
+        ldy #Lines_Blank        ;
         jsr y_wsync_loop_       ;
         rts                     ;
 y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat, out: none
