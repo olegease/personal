@@ -5,5 +5,9 @@ usage:
 	@echo "make [command]"
 template:
 	dasm template.s -f3 -v0 -I$(INC) -o$(OUT)
+verpmv:
+	dasm verpmv.s -f3 -v0 -I$(INC) -o$(OUT)
+run:
+	@stella $(OUT)
 clean:
 	@rm -f $(OUT)
