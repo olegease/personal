@@ -6,12 +6,12 @@
         ; constants
 ZERO = 0
 ONE_HEIGHT = 8
-ONE_POS_Y_MAX = 65 - ONE_HEIGHT
-ONE_POS_Y_MIN = 1
-NTSC_VISIBLE = 192
-NTSC_OVERSCAN = 30
-NTSC_VSYNC = 3
-NTSC_BLANK = 37
+ONE_POS_Y_MAX = 65 - ONE_HEIGHT ;
+ONE_POS_Y_MIN = 1               ;
+NTSC_VISIBLE = 192              ;
+NTSC_OVERSCAN = 30              ;
+NTSC_VSYNC = 3                  ;
+NTSC_BLANK = 36                 ; NOTE: borrowed one line for visible lines
         ; RAM
         seg.u data              ;
         org $80                 ;
@@ -29,6 +29,8 @@ Reset:                          ;
         lda #$02                ;
         sta COLUBK              ;
         ; -- positions
+        lda #1                  ;
+        sta OnePosX             ;
         lda #32                 ;
         sta OnePosY             ;
         ; -- pointers
@@ -41,13 +43,9 @@ Reset:                          ;
         lda #>OnePixel          ;
         sta OnePtrPixel+1       ;
 Frame:                          ;
-        jsr _ntsc_visible_      ; 192 scan lines for drawing
-        jsr _ntsc_overscan_     ; 30 scan lines for input and physics
-        jsr _ntsc_vsync_        ; 3 scan lines for synchronize vertical sync
-        jsr _ntsc_blank_        ; 37 scan lines for graphics
-        jmp Frame               ;
-        ; -- subroutines
-_ntsc_visible_ SUBROUTINE       ;
+        sta WSYNC               ;
+        lda #%00000000          ;
+        sta VBLANK              ;
         ldx #NTSC_VISIBLE / 3   ; 3-line kernel
 .kernelLoop:                    ;
         txa                     ;
@@ -70,10 +68,14 @@ _ntsc_visible_ SUBROUTINE       ;
         sta WSYNC               ;
         dex                     ;
         bne .kernelLoop         ;
-        rts                     ;
-_ntsc_overscan_ SUBROUTINE      ;
         lda #%00000010          ;
         sta VBLANK              ;
+        jsr _ntsc_overscan_     ; 30 scan lines for input and physics
+        jsr _ntsc_vsync_        ; 3 scan lines for synchronize vertical sync
+        jsr _ntsc_blank_        ; 37 scan lines for graphics
+        jmp Frame               ;
+        ; -- subroutines
+_ntsc_overscan_ SUBROUTINE      ;
         ; input
 .inputOneNorth:                 ;
         lda #%00010000          ;
@@ -109,10 +111,17 @@ _ntsc_blank_ SUBROUTINE         ;
         ; clearing graphics
         lda #ZERO               ;
         sta GRP0                ;
-        ldy #NTSC_BLANK         ;
+        ; dirty horizontal positioning
+        lda OnePosX             ;
+        sta WSYNC               ;
+        sec                     ;
+.dirtyOnePosX:                  ;
+        sbc #15                 ;
+        bcs .dirtyOnePosX       ;
+        sta RESP0               ;
+        sta WSYNC               ;
+        ldy #NTSC_BLANK - 2     ;
         jsr y_wsync_loop_       ;
-        lda #%00000000          ;
-        sta VBLANK              ;
         rts                     ;
 y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat
         sta WSYNC               ;
