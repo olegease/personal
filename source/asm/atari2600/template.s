@@ -6,13 +6,14 @@
         ; -- local
         include "define.h"
         ; constants
-Lines_Visible = NTSC_Visible    ;
 Lines_Overscan = NTSC_Overscan  ;
-Lines_Vsync = NTSC_Vsync        ;
+Lines_Vsync = NTSC_Sync         ;
 Lines_Blank = NTSC_Blank        ;
-Lines_Kernel = 1                ;
+Lines_Size = 1                  ;
         ; -- kernel draw size, NOTE: so each draw cycle including first would have same cycles
-Kernel_Loop = Lines_Visible - 2 * Lines_Kernel
+Kernel_Size = NTSC_Kernel      ;
+Kernel_Res = 1
+Kernel_Loop = Kernel_Size - 2 * Kernel_Res
         ; RAM
         seg.u data              ;
         org $80                 ;
@@ -29,20 +30,21 @@ Reset:                          ;
         lda #Black_1            ;
         sta COLUBK              ;
 Frame:                          ;
+        ; kernel
         sta WSYNC               ;
         lda #Turn_Off           ;
         sta VBLANK              ;
-        REPEAT Lines_Kernel - 1 ;
+        REPEAT Kernel_Res - 1   ;
         sta WSYNC               ;
         REPEND                  ;
         ldx #Kernel_Loop        ;
 .kernelLoop:                    ; TODO: write kernel logic
-        REPEAT Lines_Kernel     ;
+        REPEAT Kernel_Res       ;
         sta WSYNC               ;
         dex                     ;
         REPEND                  ;
         bne .kernelLoop         ;
-        REPEAT Lines_Kernel;
+        REPEAT Kernel_Res       ;
         sta WSYNC               ;
         REPEND                  ;
         lda #Turn_On            ;
