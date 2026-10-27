@@ -11,10 +11,10 @@ NTSC_BLANK = 37
         seg.u data              ;
         org $80                 ;
         ; -- positions
-PosOneX         .byte           ;
-PosOneY         .byte           ;
-PosTwoX         .byte           ;
-PosTwoY         .byte           ;
+OnePosX         .byte           ;
+OnePosY         .byte           ;
+TwoPosX         .byte           ;
+TwoPosY         .byte           ;
         ; ROM
         seg code                ;
         org $F000               ;
@@ -34,7 +34,7 @@ _ntsc_visible_ SUBROUTINE       ;
         jsr y_wsync_loop_       ;
         lda #%00000010          ;
         sta VBLANK              ;
-        rts
+        rts                     ;
 _ntsc_overscan_ SUBROUTINE      ;
         ldy #NTSC_OVERSCAN      ;
         jsr y_wsync_loop_       ;
@@ -58,6 +58,7 @@ y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat
         dey                     ;
         bne y_wsync_loop_       ;
         rts                     ;
-        org $FFFC
-        .word Reset
-        .word Reset
+        ; END OF ROM
+        org $FFFC               ;
+        .word Reset             ;
+        .word Reset             ;
