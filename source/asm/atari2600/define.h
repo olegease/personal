@@ -2,15 +2,10 @@
 Zero = 0
 Turn_Off = 0
 Turn_On = 2
-        ; colors
-Black_0 = $00
-Black_1 = $02
-Black_2 = $04
-Black_3 = $06
-Black_4 = $08
-Black_5 = $0A
-Black_6 = $0C
-Black_7 = $0E
+Page_Boundary = 256
+Data_RAM = $80
+Code_ROM_Start = $F000
+Code_ROM_Final = $FFFA
         ; Joystick
 Joy0_Movebit_Rt = %10000000
 Joy0_Movebit_Lt = %01000000

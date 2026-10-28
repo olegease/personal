@@ -12,6 +12,8 @@ verpmv:
 	dasm verpmv.s $(ARGS)
 horpmv:
 	dasm horpmv.s $(ARGS)
+ballpf:
+	dasm ballpf.s $(ARGS)
 run:
 	@stella $(CART)
 clean:

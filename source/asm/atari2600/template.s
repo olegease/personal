@@ -1,3 +1,4 @@
+; TEMPLATE
         processor 6502
         ; includes
         ; -- system
@@ -17,7 +18,7 @@ Kernel_Res = 1
 Kernel_Blocks = ( Kernel_Size / Kernel_Res ) - 2
         ; RAM
         seg.u data
-        org $80
+        org Data_RAM
         ; -- positions
 OnePosX         .byte
 OnePosY         .byte
@@ -25,7 +26,7 @@ TwoPosX         .byte
 TwoPosY         .byte
         ; ROM
         seg code
-        org $F000
+        org Code_ROM_Start
 Reset:
         CLEAN_START
         lda #Black_1
@@ -37,7 +38,7 @@ Frame:
         REPEND
         ldx #Kernel_Blocks
         jmp Kernel
-        ALIGN 256               ; NOTE: guarantees every block start at 5 cycles
+        ALIGN Page_Boundary     ; NOTE: guarantees every block start at 5 cycles
 Kernel:                         ; TODO: write kernel logic
         REPEAT Kernel_Res
         sta WSYNC
@@ -78,7 +79,7 @@ y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat, out: none
         bne y_wsync_loop_
         rts
         ; END OF ROM
-        org $FFFA
+        org Code_ROM_Final
         .word Reset             ; NMI
         .word Reset             ; RESET
         .word Reset             ; IRQ / BRK
