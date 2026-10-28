@@ -30,7 +30,7 @@ BallPosY        .byte
         org Code_ROM_Start
 Reset:
         CLEAN_START
-        lda #Black_1
+        lda #Red_4
         sta COLUBK
         ldx #Ball_Pox_X_Init
         stx BallPosX
