@@ -36,7 +36,7 @@ OnePtrPixel     .word
 Reset:
         CLEAN_START
         ; -- colors
-        lda #Black_1
+        lda #White_1
         sta COLUBK
         ; -- positions
         lda #One_Pos_Init_X
@@ -144,10 +144,10 @@ y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat
         bne y_wsync_loop_
         rts
         ; sprites
-OneColor:       .byte   #$40,#$1E,#$1E,#$1E,#$8E,#$8E,#$8E,#$40
-OnePixel:       .byte   #$18,#$18,#$18,#$18,#$18,#$18,#$18,#$18
+OneColor:       .byte   Ca4,Cl7,Cl7,Cl7,Cb4,Cb4,Cb4,Ca4
+OnePixel:       .byte   $18,$18,$18,$18,$18,$18,$18,$18
         ; END OF ROM
-        org $FFFA
+        org Code_ROM_Final
         .word Reset             ; NMI
         .word Reset             ; RESET
         .word Reset             ; IRQ / BRK

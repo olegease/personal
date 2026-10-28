@@ -6,7 +6,7 @@
         include "vcs.h"
         ; -- local
         include "define.h"
-        include "system_ntsc.h"
+        include "system_pal.h"
         ; constants
         ; -- lines
 Lines_Overscan = System_Overscan
@@ -21,7 +21,7 @@ One_Pos_X_Max = 153
 One_Pox_X_Min = 2
 One_Pos_X_Init = One_Pos_X_Max / 2
 One_Pos_Y_Init = 8
-One_Height = 2
+One_Height = 4
         ; RAM
         seg.u data
         org $80
@@ -36,7 +36,7 @@ OnePtrPixel     .word
 Reset:
         CLEAN_START
         ; -- colors
-        lda #$02
+        lda #White_1
         sta COLUBK
         ; -- positions
         lda #One_Pos_X_Init
@@ -150,8 +150,8 @@ ax_hor_pos_2Y_ SUBROUTINE       ; in: A x-coord, X object index, out: none
 HorAdjustValues:.byte $70,$60,$50,$40,$30,$20,$10,$00,$F0,$E0,$D0,$C0,$B0,$A0,$90
 HorAdjustTable = HorAdjustValues - $F1
         ; sprites
-OneColor:       .byte   $1E,$8E
-OnePixel:       .byte   $FF,$FF
+OneColor:       .byte   Cl7,Cl7,Cb4,Cb4
+OnePixel:       .byte   $FF,$FF,$FF,$FF
         ; END OF ROM
         org $FFFA
         .word Reset             ; NMI
