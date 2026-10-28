@@ -7,9 +7,11 @@
         include "define.h"
         include "system_ntsc.h"
         ; constants
+        ; -- lines
 Lines_Overscan = System_Overscan
 Lines_Sync = System_Sync
 Lines_Blank = System_Blank
+        ; -- kernel
 Kernel_Size = System_Kernel
 Kernel_Res = 1
 Kernel_Blocks = ( Kernel_Size / Kernel_Res ) - 2

@@ -1,16 +1,18 @@
-INC := /usr/local/include/atari2600
+INCL := /usr/local/include/atari2600
 NAME := cart
-OUT := $(NAME).bin
+CART := $(NAME).bin
+FILE := $(NAME).bin $(NAME).sym $(NAME).lst
+ARGS := -f3 -v0 -I$(INCL) -o$(NAME).bin -s$(NAME).sym -l$(NAME).lst
 
 usage:
 	@echo "make [command]"
 template:
-	dasm template.s -f3 -v0 -I$(INC) -o$(OUT) -s$(NAME).sym -l$(NAME).lst
+	dasm template.s $(ARGS)
 verpmv:
-	dasm verpmv.s -f3 -v0 -I$(INC) -o$(OUT)
+	dasm verpmv.s $(ARGS)
 horpmv:
-	dasm horpmv.s -f3 -v0 -I$(INC) -o$(OUT)
+	dasm horpmv.s $(ARGS)
 run:
-	@stella $(OUT)
+	@stella $(CART)
 clean:
-	@rm -f $(OUT)
+	@rm -f $(FILE)

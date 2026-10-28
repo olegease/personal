@@ -15,12 +15,12 @@ Lines_Blank = System_Blank
         ; -- kernel
 Kernel_Size = System_Kernel
 Kernel_Res = 3
-Kernel_Blocks = ( Kernel_Size / Kernel_Res ) - 2
+Kernel_Blocks = Kernel_Size / Kernel_Res - 2
         ; -- Player 0 (One)
 One_Height = 8
 One_Pos_Y_Max = Kernel_Blocks - One_Height
 One_Pos_Y_Min = Kernel_Res - 1
-One_Pos_Init_X = 80
+One_Pos_Init_X = 8 ; TODO: fix bottom display glitch at west edge
 One_Pos_Init_Y = One_Pos_Y_Max / 2
         ; RAM
         seg.u data
@@ -89,7 +89,7 @@ _overscan_ SUBROUTINE
         sta WSYNC
         ; input
 .inputOneNorth:
-        lda #%00010000
+        lda #Joy0_Movebit_Up
         bit SWCHA
         bne .inputOneSouth
         lda OnePosY
@@ -97,7 +97,7 @@ _overscan_ SUBROUTINE
         bcs .inputOneSouth
         inc OnePosY
 .inputOneSouth:
-        lda #%00100000
+        lda #Joy0_Movebit_Dn
         bit SWCHA
         bne .inputDone
         lda OnePosY
