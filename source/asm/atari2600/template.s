@@ -8,76 +8,75 @@
         include "system_ntsc.h"
         ; constants
 Lines_Overscan = System_Overscan;
-Lines_Vsync = System_Sync       ;
-Lines_Blank = System_Blank      ;
-Lines_Size = 1                  ;
-        ; -- kernel draw size, NOTE: so each draw cycle including first would have same cycles
-Kernel_Size = System_Kernel     ;
+Lines_Sync = System_Sync
+Lines_Blank = System_Blank
+Kernel_Size = System_Kernel
 Kernel_Res = 1
-Kernel_Loop = Kernel_Size - 2 * Kernel_Res
+Kernel_Blocks = ( Kernel_Size / Kernel_Res ) - 2
         ; RAM
-        seg.u data              ;
-        org $80                 ;
+        seg.u data
+        org $80
         ; -- positions
-OnePosX         .byte           ;
-OnePosY         .byte           ;
-TwoPosX         .byte           ;
-TwoPosY         .byte           ;
+OnePosX         .byte
+OnePosY         .byte
+TwoPosX         .byte
+TwoPosY         .byte
         ; ROM
-        seg code                ;
-        org $F000               ;
-Reset:                          ;
-        CLEAN_START             ;
-        lda #Black_1            ;
-        sta COLUBK              ;
-Frame:                          ;
+        seg code
+        org $F000
+Reset:
+        CLEAN_START
+        lda #Black_1
+        sta COLUBK
+Frame:
         ; kernel
-        sta WSYNC               ;
-        lda #Turn_Off           ;
-        sta VBLANK              ;
-        REPEAT Kernel_Res - 1   ;
-        sta WSYNC               ;
-        REPEND                  ;
-        ldx #Kernel_Loop        ;
+        REPEAT Kernel_Res       ; NOTE: guard `blank` block
+        sta WSYNC
+        REPEND
+        ldx #Kernel_Blocks
+        jmp .kernelLoop
+        ALIGN 256               ; NOTE: guarantees every block start at 5 cycles
 .kernelLoop:                    ; TODO: write kernel logic
-        REPEAT Kernel_Res       ;
-        sta WSYNC               ;
-        dex                     ;
-        REPEND                  ;
-        bne .kernelLoop         ;
-        REPEAT Kernel_Res       ;
-        sta WSYNC               ;
-        REPEND                  ;
-        lda #Turn_On            ;
-        sta VBLANK              ;
-        jsr _ntsc_overscan_     ; 30 scan lines for physics
-        jsr _ntsc_vsync_        ; 3 scan lines for synchronize vertical sync
-        jsr _ntsc_blank_        ; 37 scan lines for graphics
-        jmp Frame               ;
+        REPEAT Kernel_Res
+        sta WSYNC
+        REPEND
+        dex
+        bne .kernelLoop
+        REPEAT Kernel_Res       ; NOTE: guard `overscan` block
+        sta WSYNC
+        REPEND
+        jsr _overscan_
+        jsr _sync_
+        jsr _blank_
+        jmp Frame
         ; -- subroutines
-_ntsc_overscan_ SUBROUTINE      ; TODO: write physics logic
-        ldy #Lines_Overscan     ;
-        jsr y_wsync_loop_       ;
-        rts                     ;
-_ntsc_vsync_ SUBROUTINE         ; NOTE: do not touch
-        lda #Turn_On            ;
-        sta VSYNC               ;
-        ldy #Lines_Vsync;
-        jsr y_wsync_loop_       ;
-        lda #Turn_Off           ;
-        sta VSYNC               ;
-        rts                     ;
-_ntsc_blank_ SUBROUTINE         ; TODO: write graphic logic
-        ldy #Lines_Blank        ;
-        jsr y_wsync_loop_       ;
-        rts                     ;
+_overscan_ SUBROUTINE           ; TODO: write physics logic
+        lda #Turn_On
+        sta VBLANK
+        ldy #Lines_Overscan
+        jsr y_wsync_loop_
+        rts
+_sync_ SUBROUTINE               ; NOTE: do not touch
+        lda #Turn_On
+        sta VSYNC
+        ldy #Lines_Sync
+        jsr y_wsync_loop_
+        lda #Turn_Off
+        sta VSYNC
+        rts
+_blank_ SUBROUTINE              ; TODO: write graphic logic
+        ldy #Lines_Blank
+        jsr y_wsync_loop_
+        lda #Turn_Off
+        sta VBLANK
+        rts
 y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat, out: none
-        sta WSYNC               ;
-        dey                     ;
-        bne y_wsync_loop_       ;
-        rts                     ;
+        sta WSYNC
+        dey
+        bne y_wsync_loop_
+        rts
         ; END OF ROM
-        org $FFFA               ;
-        .word Reset             ;
-        .word Reset             ;
-        .word Reset             ;
+        org $FFFA
+        .word Reset             ; NMI
+        .word Reset             ; RESET
+        .word Reset             ; IRQ / BRK
