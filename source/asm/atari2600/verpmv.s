@@ -1,138 +1,153 @@
 ; VERtical Player MoVement example
         processor 6502
         ; includes
+        ; -- system
         include "macro.h"
         include "vcs.h"
+        ; -- local
+        include "define.h"
+        include "system_ntsc.h"
         ; constants
-ZERO = 0
-ONE_HEIGHT = 8
-ONE_POS_Y_MAX = 65 - ONE_HEIGHT ;
-ONE_POS_Y_MIN = 1               ;
-NTSC_VISIBLE = 192              ;
-NTSC_OVERSCAN = 30              ;
-NTSC_VSYNC = 3                  ;
-NTSC_BLANK = 36                 ; NOTE: borrowed one line for visible lines
+        ; -- lines
+Lines_Overscan = System_Overscan
+Lines_Sync = System_Sync
+Lines_Blank = System_Blank
+        ; -- kernel
+Kernel_Size = System_Kernel
+Kernel_Res = 3
+Kernel_Blocks = ( Kernel_Size / Kernel_Res ) - 2
+        ; -- Player 0 (One)
+One_Height = 8
+One_Pos_Y_Max = Kernel_Blocks - One_Height
+One_Pos_Y_Min = Kernel_Res - 1
+One_Pos_Init_X = 80
+One_Pos_Init_Y = One_Pos_Y_Max / 2
         ; RAM
-        seg.u data              ;
-        org $80                 ;
+        seg.u data
+        org $80
         ; -- positions
-OnePosX         .byte           ;
-OnePosY         .byte           ;
-OnePtrColor     .word           ;
-OnePtrPixel     .word           ;
+OnePosX         .byte
+OnePosY         .byte
+OnePtrColor     .word
+OnePtrPixel     .word
         ; ROM
-        seg code                ;
-        org $F000               ;
-Reset:                          ;
-        CLEAN_START             ;
+        seg code
+        org $F000
+Reset:
+        CLEAN_START
         ; -- colors
-        lda #$02                ;
-        sta COLUBK              ;
+        lda #Black_1
+        sta COLUBK
         ; -- positions
-        lda #1                  ;
-        sta OnePosX             ;
-        lda #32                 ;
-        sta OnePosY             ;
+        lda #One_Pos_Init_X
+        sta OnePosX
+        lda #One_Pos_Init_Y
+        sta OnePosY
         ; -- pointers
-        lda #<OneColor          ;
-        sta OnePtrColor         ;
-        lda #>OneColor          ;
-        sta OnePtrColor+1       ;
-        lda #<OnePixel          ;
-        sta OnePtrPixel         ;
-        lda #>OnePixel          ;
-        sta OnePtrPixel+1       ;
-Frame:                          ;
-        sta WSYNC               ;
-        lda #%00000000          ;
-        sta VBLANK              ;
-        ldx #NTSC_VISIBLE / 3   ; 3-line kernel
-.kernelLoop:                    ;
-        txa                     ;
-        sec                     ;
-        sbc OnePosY             ;
-        cmp #ONE_HEIGHT         ;
-        bcc .drawOne            ;
-        lda #ZERO               ;
-        sta GRP0                ;
-        beq .kernelFinish       ;
-.drawOne:                       ;
-        tay                     ;
-        lda (OnePtrPixel),Y     ;
-        sta GRP0                ;
-        lda (OnePtrColor),Y     ;
-        sta COLUP0              ;
-.kernelFinish:                  ;
-        sta WSYNC               ;
-        sta WSYNC               ;
-        sta WSYNC               ;
-        dex                     ;
-        bne .kernelLoop         ;
-        lda #%00000010          ;
-        sta VBLANK              ;
-        jsr _ntsc_overscan_     ; 30 scan lines for input and physics
-        jsr _ntsc_vsync_        ; 3 scan lines for synchronize vertical sync
-        jsr _ntsc_blank_        ; 37 scan lines for graphics
-        jmp Frame               ;
+        SET_POINTER OnePtrColor,OneColor
+        SET_POINTER OnePtrPixel,OnePixel
+Frame:
+        ; kernel
+        REPEAT Kernel_Res       ; NOTE: guard `blank` block
+        sta WSYNC
+        REPEND
+        ldx #Kernel_Blocks
+        jmp Kernel
+        ALIGN 256               ; NOTE: guarantees every block start at 5 cycles
+Kernel:
+        txa
+        sec
+        sbc OnePosY
+        cmp #One_Height
+        bcc .kernelDraw
+        lda #Zero
+        sta GRP0
+        beq .kernelFinish
+.kernelDraw:
+        tay
+        lda (OnePtrPixel),Y
+        sta GRP0
+        lda (OnePtrColor),Y
+        sta COLUP0
+.kernelFinish:
+        sta WSYNC
+        sta WSYNC
+        sta WSYNC
+        dex
+        bne Kernel
+        REPEAT Kernel_Res       ; NOTE: guard `overscan` block
+        sta WSYNC
+        REPEND
+        jsr _overscan_
+        jsr _sync_
+        jsr _blank_
+        jmp Frame
         ; -- subroutines
-_ntsc_overscan_ SUBROUTINE      ;
+_overscan_ SUBROUTINE
+        lda #Turn_On
+        sta VBLANK
+        sta WSYNC
         ; input
-.inputOneNorth:                 ;
-        lda #%00010000          ;
-        bit SWCHA               ;
-        bne .inputOneSouth      ;
-        lda OnePosY             ;
-        cmp #ONE_POS_Y_MAX      ;
-        bcs .inputOneSouth      ;
-        inc OnePosY             ;
-.inputOneSouth:                 ;
-        lda #%00100000          ;
-        bit SWCHA               ;
-        bne .inputDone          ;
-        lda OnePosY             ;
-        cmp #ONE_POS_Y_MIN + 1  ;
-        bcc .inputDone          ;
-        dec OnePosY             ;
-.inputDone:                     ;
-        sta WSYNC               ;
-        ; remaining lines       ;
-        ldy #NTSC_OVERSCAN - 1  ;
-        jsr y_wsync_loop_       ;
-        rts                     ;
-_ntsc_vsync_ SUBROUTINE         ;
-        lda #%00000010          ;
-        sta VSYNC               ;
-        ldy #NTSC_VSYNC         ;
-        jsr y_wsync_loop_       ;
-        lda #%00000000          ;
-        sta VSYNC               ;
-        rts                     ;
-_ntsc_blank_ SUBROUTINE         ;
+.inputOneNorth:
+        lda #%00010000
+        bit SWCHA
+        bne .inputOneSouth
+        lda OnePosY
+        cmp #One_Pos_Y_Max
+        bcs .inputOneSouth
+        inc OnePosY
+.inputOneSouth:
+        lda #%00100000
+        bit SWCHA
+        bne .inputDone
+        lda OnePosY
+        cmp #One_Pos_Y_Min + 1
+        bcc .inputDone
+        dec OnePosY
+.inputDone:
+        sta WSYNC
+        ; remaining lines
+        ldy #Lines_Overscan - 2
+        jsr y_wsync_loop_
+        rts
+_sync_ SUBROUTINE               ; NOTE: do not touch
+        lda #Turn_On
+        sta VSYNC
+        ldy #Lines_Sync
+        jsr y_wsync_loop_
+        lda #Turn_Off
+        sta VSYNC
+        rts
+_blank_ SUBROUTINE
+        sta WSYNC
         ; clearing graphics
-        lda #ZERO               ;
-        sta GRP0                ;
+        lda #Zero
+        sta GRP0
         ; dirty horizontal positioning
-        lda OnePosX             ;
-        sta WSYNC               ;
-        sec                     ;
-.dirtyOnePosX:                  ;
-        sbc #15                 ;
-        bcs .dirtyOnePosX       ;
-        sta RESP0               ;
-        sta WSYNC               ;
-        ldy #NTSC_BLANK - 2     ;
-        jsr y_wsync_loop_       ;
-        rts                     ;
+        lda OnePosX
+        sta WSYNC
+        sec
+.dirtyOnePosX:
+        sbc #15
+        bcs .dirtyOnePosX
+        sta RESP0
+        sta WSYNC
+        sta HMOVE
+        ldy #Lines_Blank - 3
+        jsr y_wsync_loop_
+        lda #Turn_Off
+        sta VBLANK
+        rts
 y_wsync_loop_ SUBROUTINE        ; in: Y number to repeat
-        sta WSYNC               ;
-        dey                     ;
-        bne y_wsync_loop_       ;
-        rts                     ;
+        sta WSYNC
+        dey
+        bne y_wsync_loop_
+        rts
         ; sprites
-OneColor:       .byte   #$40,#$40,#$08,#$08,#$08,#$08,#$40,#$40
+OneColor:       .byte   #$40,#$1E,#$1E,#$1E,#$8E,#$8E,#$8E,#$40
 OnePixel:       .byte   #$18,#$18,#$18,#$18,#$18,#$18,#$18,#$18
         ; END OF ROM
-        org $FFFA               ;
-        .word Reset             ;
-        .word Reset             ;
-        .word Reset             ;
+        org $FFFA
+        .word Reset             ; NMI
+        .word Reset             ; RESET
+        .word Reset             ; IRQ / BRK

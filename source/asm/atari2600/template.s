@@ -7,7 +7,7 @@
         include "define.h"
         include "system_ntsc.h"
         ; constants
-Lines_Overscan = System_Overscan;
+Lines_Overscan = System_Overscan
 Lines_Sync = System_Sync
 Lines_Blank = System_Blank
 Kernel_Size = System_Kernel
@@ -34,14 +34,14 @@ Frame:
         sta WSYNC
         REPEND
         ldx #Kernel_Blocks
-        jmp .kernelLoop
+        jmp Kernel
         ALIGN 256               ; NOTE: guarantees every block start at 5 cycles
-.kernelLoop:                    ; TODO: write kernel logic
+Kernel:                         ; TODO: write kernel logic
         REPEAT Kernel_Res
         sta WSYNC
         REPEND
         dex
-        bne .kernelLoop
+        bne Kernel
         REPEAT Kernel_Res       ; NOTE: guard `overscan` block
         sta WSYNC
         REPEND
