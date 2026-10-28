@@ -2,5 +2,7 @@
 *.bin
 *.o
 *.obj
+*.sym
+*.lst
 gcm.cache
 compile_commands.json

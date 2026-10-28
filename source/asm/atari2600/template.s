@@ -5,13 +5,14 @@
         include "vcs.h"
         ; -- local
         include "define.h"
+        include "system_ntsc.h"
         ; constants
-Lines_Overscan = NTSC_Overscan  ;
-Lines_Vsync = NTSC_Sync         ;
-Lines_Blank = NTSC_Blank        ;
+Lines_Overscan = System_Overscan;
+Lines_Vsync = System_Sync       ;
+Lines_Blank = System_Blank      ;
 Lines_Size = 1                  ;
         ; -- kernel draw size, NOTE: so each draw cycle including first would have same cycles
-Kernel_Size = NTSC_Kernel      ;
+Kernel_Size = System_Kernel     ;
 Kernel_Res = 1
 Kernel_Loop = Kernel_Size - 2 * Kernel_Res
         ; RAM
