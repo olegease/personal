@@ -1,3 +1,5 @@
+#include "model.hxx"
+
 #include <son8/main.hxx>
 #include <son8/core/alias/pour.hxx>
 #include <son8/cxx/file.hxx>
@@ -13,17 +15,9 @@ namespace app {
     using namespace son8;
     using namespace son8::core;
 
-    struct Data;
-
-    class Model final {
-        using DataPtr_ = Ptr< Data >;
-        DataPtr_ data_;
-    public:
-        void setup( );
-        void bind( );
-        void draw( );
-        void free( );
-        void clean( );
+    struct Vertex {
+        GLfloat xy[2];
+        GLfloat rgb[3];
     };
 
     struct App {
@@ -60,7 +54,7 @@ void son8::main( Args args ) {
 
     while ( not glfwWindowShouldClose( app.window )) {
         glfwPollEvents( );
-        glClearColor( .125f, .125f, .125f, 1.f );
+        glClearColor( .625f, .125f, .125f, 1.f );
         glClear( GL_COLOR_BUFFER_BIT );
         appOut.model.bind( );
         appOut.model.draw( );
@@ -82,10 +76,36 @@ failed_init:
     appOut.goto_print_error( "failed to initialize glfw" );
     if ( not app.goto_is_success( )) Exit::failure( );
 }
+
+namespace app {
+    struct Data final {
+        using Triangle = Flat< Vertex, 3 >;
+        Triangle triangle{{
+            { .xy = {-.8f,-.8f}, .rgb = { 1.f, 0.f, 0.f }},
+            { .xy = { .8f,-.8f}, .rgb = { 0.f, 1.f, 0.f }},
+            { .xy = { .0f, .8f}, .rgb = { 0.f, 0.f, 1.f }},
+        }};
+    };
+}
+
 // immediate (should use `ifdefs` macros for chosen timeline
-void app::Model::setup( ) { }
+#if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
+void app::Model::setup( ) {
+    data_ = new Data;
+}
 void app::Model::bind( ) { }
-void app::Model::draw( ) { }
+void app::Model::draw( ) {
+    Ref< Data::Triangle > triangle = data_->triangle;
+    glBegin( GL_TRIANGLES );
+    for ( auto i = 0u; i < triangle.size( ); ++i ) {
+        glColor3fv( triangle[i].rgb );
+        glVertex2fv( triangle[i].xy );
+    }
+    glEnd( );
+}
 void app::Model::free( ) { }
-void app::Model::clean( ) { }
+void app::Model::clean( ) {
+    delete data_;
+}
+#endif
 // TODO: display list, elements, shaders, vertex array, named buffers and so on
