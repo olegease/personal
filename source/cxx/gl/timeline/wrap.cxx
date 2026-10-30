@@ -3,6 +3,8 @@
 #include <son8/windowed.hxx>
 #include <son8/cxx/flow.hxx>
 
+// basic working example
+
 namespace app {
     using namespace son8;
 
@@ -21,7 +23,7 @@ void son8::main( Args args ) {
     // TODO `opengl` initialization
     window.free_opengl( );
     window.run( []{
-            gl::clear_color( .125f, .25f, .5f );
+            gl::clear_color( .125f, .125f, .125f );
             gl::clear( gl::enums::Clearbit::Color );
     });
 }

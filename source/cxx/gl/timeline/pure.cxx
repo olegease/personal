@@ -4,19 +4,24 @@
 #include <glfw/son8.hxx>
 #include <glad/son8.hxx>
 
+// basic working example
+
 namespace app {
     using namespace son8;
     using namespace son8::core;
 
     struct App {
         Ptr< GLFWwindow  > window;
-        void print_goto_error( Ptr< char const > message ) {
-            if ( not App::Is_Goto_Error ) { return; }
-            App::Is_Goto_Error = false;
+        void goto_print_error( Ptr< char const > message ) {
+            if ( isGotoPrinted ) { return; }
+            isGotoPrinted = true;
             cxx::cerr << message << cxx::endl;
         }
+        void goto_success( ) { isGotoSuccess = true; isGotoPrinted = true; }
+        bool goto_is_success( ) const { return isGotoSuccess; }
     private:
-        inline static bool Is_Goto_Error = true;
+        bool isGotoPrinted = false;
+        bool isGotoSuccess = false;
     };
 }
 
@@ -36,21 +41,19 @@ void son8::main( Args args ) {
 
     while ( not glfwWindowShouldClose( app.window )) {
         glfwPollEvents( );
-        glClearColor( .125f, .25f, .5f, 1.f );
+        glClearColor( .125f, .125f, .125f, 1.f );
         glClear( GL_COLOR_BUFFER_BIT );
         glfwSwapBuffers( app.window );
     }
 
-    glfwDestroyWindow( app.window );
-    glfwTerminate( );
-    return;
+    appOut.goto_success( );
 failed_glad:
-    appOut.print_goto_error( "failed to load glad" );
+    appOut.goto_print_error( "failed to load glad" );
     glfwDestroyWindow( app.window );
 failed_window:
-    appOut.print_goto_error( "failed to create window" );
+    appOut.goto_print_error( "failed to create window" );
     glfwTerminate( );
 failed_init:
-    appOut.print_goto_error( "failed to initialize glfw" );
-    Exit::failure( );
+    appOut.goto_print_error( "failed to initialize glfw" );
+    if ( not app.goto_is_success( )) Exit::failure( );
 }
