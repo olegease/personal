@@ -12,3 +12,6 @@ add_subdirectory( son8/windowed )
 
 add_executable( pure pure.cxx )
 target_link_libraries( pure PRIVATE son8::mainland glad::son8 glfw::son8 )
+
+add_executable( wrap wrap.cxx )
+target_link_libraries( wrap PRIVATE son8::mainland son8::overglad son8::windowed )

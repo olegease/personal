@@ -27,7 +27,7 @@ void son8::main( Args args ) {
 
     appOut.window = glfwCreateWindow( 640, 360, "glfw window", nullptr, nullptr );
 
-    if ( app.window ) { goto failed_window; }
+    if ( not app.window ) { goto failed_window; }
 
     glfwMakeContextCurrent( app.window );
 
@@ -35,7 +35,7 @@ void son8::main( Args args ) {
 
     while ( not glfwWindowShouldClose( app.window )) {
         glfwPollEvents( );
-        glClearColor( 1.f, 0.f, 0.f, 0.f );
+        glClearColor( .125f, .125f, 0.125f, 1.f );
         glClear( GL_COLOR_BUFFER_BIT );
         glfwSwapBuffers( app.window );
     }
