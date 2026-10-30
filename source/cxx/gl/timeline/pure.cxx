@@ -6,12 +6,14 @@
 
 namespace app {
     struct App {
-        bool isGotoError = true;
         GLFWwindow *window;
         void print_goto_error( char const *message ) {
-            if ( not isGotoError ) { return; }
+            if ( not App::Is_Goto_Error ) { return; }
+            App::Is_Goto_Error = false;
             std::cerr << message << std::endl;
         }
+    private:
+        inline static bool Is_Goto_Error = true;
     };
 
     using Error = std::runtime_error;
@@ -25,7 +27,7 @@ void son8::main( Args args ) {
 
     appOut.window = glfwCreateWindow( 640, 360, "glfw window", nullptr, nullptr );
 
-    if ( not app.window ) { goto failed_window; }
+    if ( app.window ) { goto failed_window; }
 
     glfwMakeContextCurrent( app.window );
 
