@@ -1,6 +1,9 @@
 #ifndef APP_MODEL_HXX
 #define APP_MODEL_HXX
 
+#include <cassert>
+#define APP_ASSERT( check ) assert(( check ))
+
 #include <son8/core/alias/pour.hxx>
 
 namespace app {
