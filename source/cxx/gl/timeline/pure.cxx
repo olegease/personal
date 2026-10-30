@@ -1,28 +1,29 @@
 #include <son8/main.hxx>
+#include <son8/core/alias/pour.hxx>
+#include <son8/cxx/file.hxx>
 #include <glfw/son8.hxx>
 #include <glad/son8.hxx>
-#include <iostream>
-#include <stdexcept>
 
 namespace app {
+    using namespace son8;
+    using namespace son8::core;
+
     struct App {
-        GLFWwindow *window;
-        void print_goto_error( char const *message ) {
+        Ptr< GLFWwindow  > window;
+        void print_goto_error( Ptr< char const > message ) {
             if ( not App::Is_Goto_Error ) { return; }
             App::Is_Goto_Error = false;
-            std::cerr << message << std::endl;
+            cxx::cerr << message << cxx::endl;
         }
     private:
         inline static bool Is_Goto_Error = true;
     };
-
-    using Error = std::runtime_error;
 }
 
 void son8::main( Args args ) {
     using namespace app;
     App appOut;
-    App const &app = appOut;
+    Ref< App > app = appOut;
     if ( not glfwInit( )) { goto failed_init; }
 
     appOut.window = glfwCreateWindow( 640, 360, "glfw window", nullptr, nullptr );
@@ -31,11 +32,11 @@ void son8::main( Args args ) {
 
     glfwMakeContextCurrent( app.window );
 
-    if ( not gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress))) { goto failed_glad; }
+    if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
 
     while ( not glfwWindowShouldClose( app.window )) {
         glfwPollEvents( );
-        glClearColor( .125f, .125f, 0.125f, 1.f );
+        glClearColor( .125f, .25f, .5f, 1.f );
         glClear( GL_COLOR_BUFFER_BIT );
         glfwSwapBuffers( app.window );
     }
