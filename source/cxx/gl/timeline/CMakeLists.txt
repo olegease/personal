@@ -25,4 +25,4 @@ target_link_libraries( vertices-pure PRIVATE son8::mainland son8::core_lib glad:
 # -- wrap
 add_executable( vertices-wrap vertices/wrap.cxx )
 target_link_libraries( vertices-wrap PRIVATE son8::mainland son8::core_lib son8::overglad son8::windowed )
-# TODO timelines for lighting and textures processing
+# TODO timelines for lighting, blending, matrices, material and textures processing

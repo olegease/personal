@@ -7,13 +7,20 @@
 #include <son8/core/alias/pour.hxx>
 
 namespace app {
-    using namespace son8::core;
+    using namespace son8;
+    using namespace core;
+
+    static constexpr signed Zero = 0;
+    static constexpr unsigned Zero_U = 0u;
+
     struct Data;
 
     class Model final {
         using DataPtr_ = Ptr< Data >;
         DataPtr_ data_;
-    public:
+      public:
+        Model( );
+       ~Model( );
         void setup( );
         void bind( );
         void draw( );
@@ -22,4 +29,4 @@ namespace app {
     };
 }
 
-#endif//APP_MODEL_HXX
+#endif // INCLUDE GUARD
