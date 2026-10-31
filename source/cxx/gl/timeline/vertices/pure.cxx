@@ -90,19 +90,25 @@ failed_init:
 namespace app {
 
     struct Vertex {
+        using Position_Type = GLdouble;
+        using Color_Type = GLfloat;
+        struct Data_XY {
+            Position_Type x, y;
+        };
+        struct Data_RGB {
+            Color_Type r, g, b;
+        };
+        using Position = Data_XY;
+        using Color = Data_RGB;
         static constexpr GLenum Position_Type_GL = GL_DOUBLE;
         static constexpr GLenum Color_Type_GL = GL_FLOAT;
         static constexpr auto Position_Size = 2;
         static constexpr auto Color_Size = 3;
-        using Position_Type = GLdouble;
-        using Color_Type = GLfloat;
-        using Position = Flat< Position_Type, Position_Size >;
-        using Color = Flat< Color_Type, Color_Size >;
         Position xy;
         Color rgb;
     };
 
-    class Data final {
+    struct Data final {
         static constexpr auto Vertices_Count_ = 4;
         static constexpr auto Indices_Count_ = 6;
         using Vertices_ = Flat< Vertex, Vertices_Count_ >;
@@ -118,14 +124,13 @@ namespace app {
             0u, 1u, 2u,
             2u, 3u, 0u
         }};
-    public:
         using Index = Index_;
         auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
         auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
-        auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
-        auto xy_v( Index index ) const -> Ptr< Vertex::Position_Type const > { return xy( index ).data( ); }
-        auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgb; }
-        auto rgb_v( Index index ) const -> Ptr< Vertex::Color_Type const > { return rgb( index ).data( ); }
+        auto xy( Index index ) const -> Vertex::Position const & { return vertices_[index].xy; }
+        auto xy_v( Index index ) const -> Vertex::Position_Type const * { return &xy( index ).x; }
+        auto rgb( Index index ) const -> Vertex::Color const & { return vertices_[index].rgb; }
+        auto rgb_v( Index index ) const -> Vertex::Color_Type const * { return &rgb( index ).r; }
 #if APP_TIMELINE == APP_TIMELINE_LIST
         using List = GLuint;
         List list;
@@ -209,7 +214,7 @@ bool app::Model::setup( ) try {
     data_->colors.reserve( size );
     data_->positions.reserve( size );
     for ( auto index : data_->raw_indices( )) {
-        data_->colors.emplace_back( data_->rgb( index ));
+        data_->colors.push_back( data_->rgb( index ));
         data_->positions.emplace_back( data_->xy( index ));
     }
     return true;
