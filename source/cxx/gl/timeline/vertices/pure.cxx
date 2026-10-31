@@ -90,10 +90,14 @@ failed_init:
 namespace app {
 
     struct Vertex {
+        static constexpr GLenum Position_Type_GL = GL_DOUBLE;
+        static constexpr GLenum Color_Type_GL = GL_FLOAT;
         static constexpr auto Position_Size = 2;
         static constexpr auto Color_Size = 3;
-        using Position = Flat< GLfloat, Position_Size >;
-        using Color = Flat< GLfloat, Color_Size >;
+        using Position_Type = GLdouble;
+        using Color_Type = GLfloat;
+        using Position = Flat< Position_Type, Position_Size >;
+        using Color = Flat< Color_Type, Color_Size >;
         Position xy;
         Color rgb;
     };
@@ -105,10 +109,10 @@ namespace app {
         using Index_ = GLubyte;
         using Indices_ = Flat< Index_, Indices_Count_ >;
         Vertices_ vertices_{{
-            { .xy = {-.8f,-.8f}, .rgb = { 1.f, 0.f, 0.f }},
-            { .xy = { .8f,-.8f}, .rgb = { 0.f, 1.f, 0.f }},
-            { .xy = { .8f, .8f}, .rgb = { 0.f, 0.f, 1.f }},
-            { .xy = {-.8f, .8f}, .rgb = { 1.f, 1.f, 1.f }},
+            { .xy = {-.8,-.8}, .rgb = { 1.f, 0.f, 0.f }},
+            { .xy = { .8,-.8}, .rgb = { 0.f, 1.f, 0.f }},
+            { .xy = { .8, .8}, .rgb = { 0.f, 0.f, 1.f }},
+            { .xy = {-.8, .8}, .rgb = { 1.f, 1.f, 1.f }},
         }};
         Indices_ indices_{{
             0u, 1u, 2u,
@@ -119,9 +123,9 @@ namespace app {
         auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
         auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
         auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
-        auto xy_v( Index index ) const -> Ptr< GLfloat const > { return xy( index ).data( ); }
+        auto xy_v( Index index ) const -> Ptr< Vertex::Position_Type const > { return xy( index ).data( ); }
         auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgb; }
-        auto rgb_v( Index index ) const -> Ptr< GLfloat const > { return rgb( index ).data( ); }
+        auto rgb_v( Index index ) const -> Ptr< Vertex::Color_Type const > { return rgb( index ).data( ); }
 #if APP_TIMELINE == APP_TIMELINE_LIST
         using List = GLuint;
         List list;
@@ -161,7 +165,7 @@ void app::Model::draw( ) {
     glBegin( GL_TRIANGLES );
     for ( auto index : data_->raw_indices( )) {
         glColor3fv( data_->rgb_v( index ));
-        glVertex2fv( data_->xy_v( index ));
+        glVertex2dv( data_->xy_v( index ));
     }
     glEnd( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
@@ -178,7 +182,7 @@ bool app::Model::setup( ) {
     glBegin( GL_TRIANGLES );
     for ( auto index : data_->raw_indices( )) {
         glColor3fv( data_->rgb_v( index ));
-        glVertex2fv( data_->xy_v( index ));
+        glVertex2dv( data_->xy_v( index ));
     }
     glEnd( );
     glEndList( );
@@ -214,8 +218,8 @@ bool app::Model::setup( ) try {
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
-    glVertexPointer( Vertex::Position_Size, GL_FLOAT, Zero, data_->positions.data( ));
-    glColorPointer( Vertex::Color_Size, GL_FLOAT, Zero, data_->colors.data( ));
+    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, Zero, data_->positions.data( ));
+    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, Zero, data_->colors.data( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -244,8 +248,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
     static constexpr auto stride = sizeof( Vertex );
-    glVertexPointer( Vertex::Position_Size, GL_FLOAT, stride, &data_->vertices[Zero].xy );
-    glColorPointer( Vertex::Color_Size, GL_FLOAT, stride, &data_->vertices[Zero].rgb );
+    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[Zero].xy );
+    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[Zero].rgb );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -276,8 +280,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
     static constexpr auto stride = sizeof( Vertex );
-    glVertexPointer( Vertex::Position_Size, GL_FLOAT, stride, &data_->vertices[0].xy );
-    glColorPointer( Vertex::Color_Size, GL_FLOAT, stride, &data_->vertices[0].rgb );
+    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[0].xy );
+    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[0].rgb );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -317,8 +321,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_COLOR_ARRAY );
     glBindBuffer( GL_ARRAY_BUFFER, data_->vbo( ));
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_->ebo( ));
-    glVertexPointer( Vertex::Position_Size, GL_FLOAT, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
-    glColorPointer( Vertex::Color_Size, GL_FLOAT, sizeof( Vertex), (void *)offsetof( Vertex, rgb ));
+    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
+    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgb ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
