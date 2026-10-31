@@ -137,8 +137,9 @@ namespace app {
     typedef GLubyte Data_Index;
     typedef Data_Index Data_Indices_[Data_Indices_Count_];
     typedef GLuint Data_List;
+    typedef GLuint Data_Buffer;
 
-    struct Data final {
+    struct Data {
         Data_Vertices_ vertices_ = {
             { .xy = {-.8,-.8}, .rgba = {255u, Zero, Zero, 255u }},
             { .xy = { .8,-.8}, .rgba = {Zero, 255u, Zero, 255u }},
@@ -149,14 +150,6 @@ namespace app {
             0u, 1u, 2u,
             2u, 3u, 0u
         };
-#if 0
-        auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
-        auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
-        auto xy( Index index ) const -> Vertex::Position const & { return vertices_[index].xy; }
-        auto xy_v( Index index ) const -> Vertex::Position_Type const * { return &xy( index ).x; }
-        auto rgb( Index index ) const -> Vertex::Color const & { return vertices_[index].rgb; }
-        auto rgb_v( Index index ) const -> Vertex::Color_Type const * { return &rgb( index ).r; }
-#endif
 #if APP_TIMELINE == APP_TIMELINE_LIST
         Data_List list;
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
@@ -168,13 +161,10 @@ namespace app {
         Vertex *vertices;
         Data_Index *indices;
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-        using Buffer = GLuint;
         static constexpr auto Index_VBO = 0;
         static constexpr auto Index_EBO = 1;
         static constexpr auto Buffer_Count = 2;
-        Flat< Buffer, Buffer_Count > buffers;
-        auto vbo( ) const -> Buffer { return buffers[Index_VBO]; }
-        auto ebo( ) const -> Buffer { return buffers[Index_EBO]; }
+        Data_Buffer buffers[Buffer_Count];
         Vertex *vertices;
         Data_Index *indices;
         // NOTE: cache counts as data would be passed to buffer object and cleared
@@ -191,6 +181,10 @@ namespace app {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].xy.x;
     }
+#if APP_TIMELINE == APP_TIMELINE_BUFFER
+    Data_Buffer data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
+    Data_Buffer data_buffer_ebo( Data const *data ) { return data->buffers[Data::Index_EBO]; }
+#endif
 
 }
 // Vertices RAII
@@ -367,10 +361,10 @@ bool app::Model::setup( ) {
     c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
     data_->verticesCount = Data_Vertices_Count_;
     data_->indicesCount = Data_Indices_Count_;
-    glGenBuffers( Data::Buffer_Count, data_->buffers.data( ));
-    glBindBuffer( GL_ARRAY_BUFFER, data_->vbo( ));
+    glGenBuffers( Data::Buffer_Count, data_->buffers );
+    glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
     glBufferData( GL_ARRAY_BUFFER, data_->verticesCount * sizeof( Vertex ), data_->vertices, GL_STATIC_DRAW );
-    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_->ebo( ));
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
     glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Data_Index ), data_->indices, GL_STATIC_DRAW );
     c::free( data_->vertices );
     c::free( data_->indices );
@@ -382,8 +376,8 @@ bool app::Model::setup( ) {
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
-    glBindBuffer( GL_ARRAY_BUFFER, data_->vbo( ));
-    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_->ebo( ));
+    glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
     glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
     glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
@@ -403,7 +397,7 @@ void app::Model::free( ) {
 }
 
 void app::Model::clean( ) {
-    glDeleteBuffers( Data::Buffer_Count, data_->buffers.data( ));
+    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #else
