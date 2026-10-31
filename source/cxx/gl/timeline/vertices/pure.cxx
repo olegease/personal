@@ -1,5 +1,5 @@
 #define APP_TYPE_PURE
-#include "model.hxx"
+#include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
 #include <son8/core/alias/data.hxx>
@@ -9,36 +9,17 @@
 // son8 wrappers
 #include <glfw/son8.hxx>
 #include <glad/son8.hxx>
-
 /**
  * Vertices Pure Timeline Examples
  */
-
-// TODO: wrap the model into special class that would allow to
-// \ choose `OpenGL` version for vertices processing for future timelines
-
-#define APP_TIMELINE_IMMEDIATE  0x0100'1u // Vertex Calls
-#define APP_TIMELINE_LIST       0x0100'2u // Display Lists
-#define APP_TIMELINE_ARRAY      0x0101'1u // Draw Arrays
-#define APP_TIMELINE_INTERLEAVE 0x0101'2u // Draw Arrays Interleaved
-#define APP_TIMELINE_ELEMENT    0x0101'3u // Draw Elements
-#define APP_TIMELINE_BUFFER     0x0105'0u // Vertex Buffer Objects
-// TODO
-//`#define APP_TIMELINE_SHADER 0x0201'0u`
-//`#define APP_TIMELINE_OBJECT 0x0303'0u` // Vertex Array Object
-//`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification
 #define APP_TIMELINE APP_TIMELINE_BUFFER
+
+// TODO: rewrite it using mostly `c` style coding, like raw loops, no exceptions leaked
+// \ `wrap` version should use modern techniques instead
 
 namespace app {
 
-    struct Vertex {
-        static constexpr auto Position_Size = 2;
-        static constexpr auto Color_Size = 3;
-        using Position = Flat< GLfloat, Position_Size >;
-        using Color = Flat< GLfloat, Color_Size >;
-        Position xy;
-        Color rgb;
-    };
+    inline constexpr char const *Timeline_Title = "Pure timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
 
     struct App {
         Model model;
@@ -54,6 +35,7 @@ namespace app {
         bool isGotoPrinted = false;
         bool isGotoSuccess = false;
     };
+
 }
 
 void son8::main( Args args ) {
@@ -62,7 +44,7 @@ void son8::main( Args args ) {
     Ref< App > app = appOut;
     if ( not glfwInit( )) { goto failed_init; }
 
-    appOut.window = glfwCreateWindow( 640, 360, "glfw window", nullptr, nullptr );
+    appOut.window = glfwCreateWindow( 640, 360, Timeline_Title, nullptr, nullptr );
 
     if ( not app.window ) { goto failed_window; }
 
@@ -70,36 +52,76 @@ void son8::main( Args args ) {
 
     if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
 
-    appOut.model.setup( );
+    if ( not appOut.model.setup( )) { goto failed_setup; }
 
-    while ( not glfwWindowShouldClose( app.window )) {
+    while ( not glfwWindowShouldClose( app.window )) try {
         glfwPollEvents( );
         glClearColor( .125f, .125f, .125f, 1.f );
         glClear( GL_COLOR_BUFFER_BIT );
         appOut.model.bind( );
         appOut.model.draw( );
         appOut.model.free( );
-
         glfwSwapBuffers( app.window );
-    }
-
-    appOut.model.clean( );
+    } catch ( ... ) { goto failed_while; }
 
     appOut.goto_success( );
+
+failed_while:
+    appOut.model.clean( );
+    appOut.goto_print_error( "failed while loop" );
+
+failed_setup:
+    appOut.goto_print_error( "failed model setup" );
+
 failed_glad:
     appOut.goto_print_error( "failed to load glad" );
     glfwDestroyWindow( app.window );
+
 failed_window:
     appOut.goto_print_error( "failed to create window" );
     glfwTerminate( );
+
 failed_init:
     appOut.goto_print_error( "failed to initialize glfw" );
+
     if ( not app.goto_is_success( )) Exit::failure( );
 }
 
 namespace app {
-    struct Data final {
-        using Element = GLubyte;
+
+    struct Vertex {
+        static constexpr auto Position_Size = 2;
+        static constexpr auto Color_Size = 3;
+        using Position = Flat< GLfloat, Position_Size >;
+        using Color = Flat< GLfloat, Color_Size >;
+        Position xy;
+        Color rgb;
+    };
+
+    class Data final {
+        static constexpr auto Vertices_Count_ = 4;
+        static constexpr auto Indices_Count_ = 6;
+        using Vertices_ = Flat< Vertex, Vertices_Count_ >;
+        using Index_ = GLubyte;
+        using Indices_ = Flat< Index_, Indices_Count_ >;
+        Vertices_ vertices_{{
+            { .xy = {-.8f,-.8f}, .rgb = { 1.f, 0.f, 0.f }},
+            { .xy = { .8f,-.8f}, .rgb = { 0.f, 1.f, 0.f }},
+            { .xy = { .8f, .8f}, .rgb = { 0.f, 0.f, 1.f }},
+            { .xy = {-.8f, .8f}, .rgb = { 1.f, 1.f, 1.f }},
+        }};
+        Indices_ indices_{{
+            0u, 1u, 2u,
+            2u, 3u, 0u
+        }};
+    public:
+        using Index = Index_;
+        auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
+        auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
+        auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
+        auto xy_v( Index index ) const -> Ptr< GLfloat const > { return xy( index ).data( ); }
+        auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgb; }
+        auto rgb_v( Index index ) const -> Ptr< GLfloat const > { return rgb( index ).data( ); }
 #if APP_TIMELINE == APP_TIMELINE_LIST
         using List = GLuint;
         List list;
@@ -110,6 +132,7 @@ namespace app {
         Grow< Vertex > vertices;
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
         Grow< Vertex > vertices;
+        Grow< Index > indices;
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
         using Buffer = GLuint;
         static constexpr auto Index_VBO = 0;
@@ -119,73 +142,75 @@ namespace app {
         auto vbo( ) const -> Buffer { return buffers[Index_VBO]; }
         auto ebo( ) const -> Buffer { return buffers[Index_EBO]; }
         Grow< Vertex > vertices;
-        Grow< Element > indices;
+        Grow< Index > indices;
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+        Size verticesCount = 0;
 #endif
-        static constexpr auto Vertices_Count = 4;
-        static constexpr auto Elements_Count = 6;
-        using Triangles = Flat< Vertex, Vertices_Count >;
-        Triangles triangles{{
-            { .xy = {-.8f,-.8f}, .rgb = { 1.f, 0.f, 0.f }},
-            { .xy = { .8f,-.8f}, .rgb = { 0.f, 1.f, 0.f }},
-            { .xy = { .8f, .8f}, .rgb = { 0.f, 0.f, 1.f }},
-            { .xy = {-.8f, .8f}, .rgb = { 1.f, 1.f, 1.f }},
-        }};
-        Flat< Element, Elements_Count > elements{{ 0u, 1u, 2u, 2u, 3u, 0u }};
-        auto xy( Element index ) const -> Ref< Vertex::Position > { return triangles[index].xy; }
-        auto xy_v( Element index ) const -> Ptr< GLfloat const > { return xy( index ).data( ); }
-        auto rgb( Element index ) const -> Ref< Vertex::Color > { return triangles[index].rgb; }
-        auto rgb_v( Element index ) const -> Ptr< GLfloat const > { return rgb( index ).data( ); }
     };
 }
-// Model RAII
+// Vertices RAII
 app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
-// immediate (should use `ifdefs` macros for chosen timeline
+// timelines
 #if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
-void app::Model::setup( ) { }
+bool app::Model::setup( ) try { return true; } catch ( ... ) { return false; }
 void app::Model::bind( ) { }
+
 void app::Model::draw( ) {
     glBegin( GL_TRIANGLES );
-    for ( auto element : data_->elements ) {
-        glColor3fv( data_->rgb_v( element ));
-        glVertex2fv( data_->xy_v( element ));
+    for ( auto index : data_->raw_indices( )) {
+        glColor3fv( data_->rgb_v( index ));
+        glVertex2fv( data_->xy_v( index ));
     }
     glEnd( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) { }
+
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_LIST
-void app::Model::setup( ) {
+bool app::Model::setup( ) {
     Ref< Data::List > list = data_->list;
     data_->list = glGenLists( 1 );
     glNewList( list, GL_COMPILE );
     glBegin( GL_TRIANGLES );
-    for ( auto element : data_->elements ) {
-        glColor3fv( data_->rgb_v( element ));
-        glVertex2fv( data_->xy_v( element ));
+    for ( auto index : data_->raw_indices( )) {
+        glColor3fv( data_->rgb_v( index ));
+        glVertex2fv( data_->xy_v( index ));
     }
     glEnd( );
     glEndList( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    return true;
 }
+
 void app::Model::bind( ) { }
+
 void app::Model::draw( ) {
     glCallList( data_->list );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) { }
+
 void app::Model::clean( ) {
     glDeleteLists( data_->list, 1 );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
-void app::Model::setup( ) {
-    for ( auto index : data_->elements ) {
+bool app::Model::setup( ) try {
+    Size size = data_->raw_indices( ).size( );
+    data_->colors.reserve( size );
+    data_->positions.reserve( size );
+    for ( auto index : data_->raw_indices( )) {
         data_->colors.emplace_back( data_->rgb( index ));
         data_->positions.emplace_back( data_->xy( index ));
     }
-}
+    return true;
+} catch ( ... ) { return false; }
+
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
@@ -193,22 +218,28 @@ void app::Model::bind( ) {
     glColorPointer( Vertex::Color_Size, GL_FLOAT, Zero, data_->colors.data( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, Data::Elements_Count );
+    glDrawArrays( GL_TRIANGLES, Zero, data_->positions.size( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
-void app::Model::setup( ) {
-    for ( auto index : data_->elements ) {
+bool app::Model::setup( ) try {
+    data_->vertices.reserve( data_->raw_indices( ).size( ));
+    for ( auto index : data_->raw_indices( )) {
         data_->vertices.emplace_back( Vertex{ data_->xy( index ), data_->rgb( index )});
     }
-}
+    return true;
+} catch ( ... ) { return false; }
+
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
@@ -217,21 +248,30 @@ void app::Model::bind( ) {
     glColorPointer( Vertex::Color_Size, GL_FLOAT, stride, &data_->vertices[Zero].rgb );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, Data::Elements_Count );
+    glDrawArrays( GL_TRIANGLES, Zero, data_->vertices.size( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
-void app::Model::setup( ) {
-    data_->vertices.reserve( data_->triangles.size( ));
-    for ( Ref< Vertex > vertex : data_->triangles ) data_->vertices.emplace_back( vertex );
-}
+bool app::Model::setup( ) try {
+    data_->vertices.reserve( data_->raw_vertices( ).size( ));
+    for ( Ref< Vertex > vertex : data_->raw_vertices( )) {
+        data_->vertices.emplace_back( vertex );
+    }
+    data_->indices.resize( data_->raw_indices( ).size( ));
+    cxx::copy( data_->raw_indices( ).begin( ), data_->raw_indices( ).end( ), data_->indices.begin( ));
+    return true;
+} catch ( ... ) { return false; }
+
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
@@ -240,31 +280,38 @@ void app::Model::bind( ) {
     glColorPointer( Vertex::Color_Size, GL_FLOAT, stride, &data_->vertices[0].rgb );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::draw( ) {
-    glDrawElements( GL_TRIANGLES, data_->elements.size( ), GL_UNSIGNED_BYTE, data_->elements.data( ));
+    glDrawElements( GL_TRIANGLES, data_->indices.size( ), GL_UNSIGNED_BYTE, data_->indices.data( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-void app::Model::setup( ) {
-    data_->vertices.resize( data_->triangles.size( ));
-    data_->indices.resize( data_->elements.size( ));
-    std::copy( data_->triangles.begin( ), data_->triangles.end( ), data_->vertices.begin( ));
-    std::copy( data_->elements.begin( ), data_->elements.end( ), data_->indices.begin( ));
+bool app::Model::setup( ) try {
+    data_->verticesCount = data_->raw_vertices( ).size( );
+    data_->indicesCount = data_->raw_indices( ).size( );
+    data_->vertices.resize( data_->verticesCount );
+    data_->indices.resize( data_->indicesCount );
+    cxx::copy( data_->raw_vertices( ).begin( ), data_->raw_vertices( ).end( ), data_->vertices.begin( ));
+    cxx::copy( data_->raw_indices( ).begin( ), data_->raw_indices( ).end( ), data_->indices.begin( ));
     glGenBuffers( Data::Buffer_Count, data_->buffers.data( ));
     glBindBuffer( GL_ARRAY_BUFFER, data_->vbo( ));
-    glBufferData( GL_ARRAY_BUFFER, Data::Vertices_Count * sizeof( Vertex ), data_->vertices.data( ), GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, data_->vertices.size( ) * sizeof( Vertex ), data_->vertices.data( ), GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_->ebo( ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indices.size() * sizeof( Data::Element ), data_->indices.data( ), GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indices.size() * sizeof( Data::Index ), data_->indices.data( ), GL_STATIC_DRAW );
     data_->vertices.clear( );
     data_->indices.clear( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
-}
+    return true;
+} catch ( ... ) { return false; }
+
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
@@ -274,25 +321,29 @@ void app::Model::bind( ) {
     glColorPointer( Vertex::Color_Size, GL_FLOAT, sizeof( Vertex), (void *)offsetof( Vertex, rgb ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::draw( ) {
-    glDrawElements(GL_TRIANGLES, Data::Elements_Count, GL_UNSIGNED_BYTE, (void *)Zero);
+    glDrawElements(GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero);
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
-    glBindBuffer( GL_ARRAY_BUFFER, 0 );
-    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+    glBindBuffer( GL_ARRAY_BUFFER, Zero );
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+
 void app::Model::clean( ) {
     glDeleteBuffers( Data::Buffer_Count, data_->buffers.data( ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
-#endif
-// TODO: display list, elements, shaders, vertex array, named buffers and so on
-//void app::Model::setup( ) { }
-//void app::Model::bind( ) { }
-//void app::Model::draw( ) { }
-//void app::Model::free( ) { }
+#else
+// TODO: vertex array object, named buffers and so on
+bool app::Model::setup( ) try { } catch ( ... ) { return false; }
+void app::Model::bind( ) { }
+void app::Model::draw( ) { }
+void app::Model::free( ) { }
 //void app::Model::clean( ) { }
+#endif // timelines

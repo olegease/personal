@@ -1,5 +1,5 @@
 #define APP_TYPE_WRAP
-#include "model.hxx"
+#include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
 #include <son8/overglad.hxx>
@@ -9,7 +9,6 @@
 /**
  * Vertices Wrap Timeline Examples
  */
-
 
 namespace app {
 
@@ -36,7 +35,9 @@ void son8::main( Args args ) {
     Window window{ SON8_OVERGLAD_VERSION };
 
     if ( window.is_error( window.bind_opengl( ))) { throw Error{ "cannot bind opengl" }; }
-    appOut.model.setup( );
+
+    if ( appOut.model.setup( ) ) { throw Error{ "setup model failed" }; }
+
     window.free_opengl( );
     window.run( [&appOut]{
             gl::clear_color( .125f, .25f, .5f );
@@ -50,7 +51,7 @@ void son8::main( Args args ) {
 // model
 app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
-void app::Model::setup( ) { }
+bool app::Model::setup( ) try { return true; } catch ( ... ) { return false; }
 void app::Model::bind( ) { }
 void app::Model::draw( ) { }
 void app::Model::free( ) { }
