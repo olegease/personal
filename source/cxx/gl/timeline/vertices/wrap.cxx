@@ -1,4 +1,5 @@
 #define APP_TYPE_WRAP
+#define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
@@ -9,7 +10,6 @@
 /**
  * Vertices Wrap Timeline Examples
  */
-#define APP_TIMELINE APP_TIMELINE_BUFFER
 
 #define SON8_OVERGLAD_INCLUDE_DEPRECATED
 #if 0u \

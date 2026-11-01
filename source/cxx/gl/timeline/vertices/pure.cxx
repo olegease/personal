@@ -1,4 +1,5 @@
 #define APP_TYPE_PURE
+#define APP_TIMELINE APP_TIMELINE_SHADER
 #include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
@@ -12,7 +13,6 @@
 /**
  * Vertices Pure Timeline Examples
  */
-#define APP_TIMELINE APP_TIMELINE_SHADER
 
 // TODO: rewrite it using mostly `c` style coding, like raw loops, no exceptions leaked
 // \ `wrap` version should use modern techniques instead
@@ -109,23 +109,28 @@ failed_init:
 
 namespace app {
 
+    typedef GLfloat Vertex_Position_Type;
+    typedef GLubyte Vertex_Color_Type;
+
+    struct Vertex_Data_Position {
+        Vertex_Position_Type x, y;
+    };
+
+    struct Vertex_Data_Color {
+        Vertex_Color_Type r, g, b, a;
+    };
+
+    static constexpr GLenum Vertex_Position_Type_GL = GL_FLOAT;
+    static constexpr GLenum Vertex_Color_Type_GL = GL_UNSIGNED_BYTE;
+    static constexpr auto Vertex_Position_Size = 2;
+    static constexpr auto Vertex_Color_Size = 4;
+
+    typedef Vertex_Data_Position Vertex_Position;
+    typedef Vertex_Data_Color Vertex_Color;
+
     struct Vertex {
-        typedef GLfloat Position_Type;
-        typedef GLubyte Color_Type;
-        struct Data_XY {
-            Position_Type x, y;
-        };
-        struct Data_RGB {
-            Color_Type r, g, b, a;
-        };
-        typedef Data_XY Position;
-        typedef Data_RGB Color;
-        static constexpr GLenum Position_Type_GL = GL_FLOAT;
-        static constexpr GLenum Color_Type_GL = GL_UNSIGNED_BYTE;
-        static constexpr auto Position_Size = 2;
-        static constexpr auto Color_Size = 4;
-        Position xy;
-        Color rgba;
+        Vertex_Position xy;
+        Vertex_Color rgba;
         GLubyte pad[4];
     };
     static_assert( sizeof(Vertex) == 16
@@ -185,8 +190,8 @@ namespace app {
 #if APP_TIMELINE == APP_TIMELINE_LIST
         Data_List list;
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
-        Vertex::Position *positions;
-        Vertex::Color *colors;
+        Vertex_Position *positions;
+        Vertex_Color *colors;
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
         Vertex *vertices;
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
@@ -220,11 +225,11 @@ namespace app {
 #endif
     }; // struct Data
 
-    Vertex::Color_Type const *data_color_v( Data const *data, Size i ) {
+    Vertex_Color_Type const *data_color_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].rgba.r;
     }
-    Vertex::Position_Type const *data_vertex_v( Data const *data, Size i ) {
+    Vertex_Position_Type const *data_vertex_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].xy.x;
     }
@@ -287,14 +292,14 @@ void app::Model::clean( ) {
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
 bool app::Model::setup( ) {
     Size size = Data_Indices_Count_;
-    data_->positions = ( Vertex::Position *)c::malloc( sizeof(Vertex::Position) * size );
-    data_->colors = ( Vertex::Color *)c::malloc( sizeof(Vertex::Color) * size );
+    data_->positions = ( Vertex_Position *)c::malloc( sizeof(Vertex_Position) * size );
+    data_->colors = ( Vertex_Color *)c::malloc( sizeof(Vertex_Color) * size );
 
     if ( not data_->positions or not data_->colors ) return false;
 
     for ( Size i = 0u; i < size; ++i ) {
-        c::memcpy( data_->positions + i, data_vertex_v( data_, i ), sizeof( Vertex::Position ));
-        c::memcpy( data_->colors + i, data_color_v( data_, i ), sizeof( Vertex::Color ));
+        c::memcpy( data_->positions + i, data_vertex_v( data_, i ), sizeof( Vertex_Position ));
+        c::memcpy( data_->colors + i, data_color_v( data_, i ), sizeof( Vertex_Color ));
     }
 
     return true;
@@ -303,8 +308,8 @@ bool app::Model::setup( ) {
 void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
-    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, Zero, data_->positions );
-    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, Zero, data_->colors );
+    glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, Zero, data_->positions );
+    glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, Zero, data_->colors );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -341,8 +346,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
     static constexpr auto stride = sizeof( Vertex );
-    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[Zero].xy );
-    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[Zero].rgba );
+    glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, stride, &data_->vertices[Zero].xy );
+    glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, stride, &data_->vertices[Zero].rgba );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -377,8 +382,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_VERTEX_ARRAY );
     glEnableClientState( GL_COLOR_ARRAY );
     static constexpr auto stride = sizeof( Vertex );
-    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[0].xy );
-    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[0].rgba );
+    glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, stride, &data_->vertices[0].xy );
+    glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, stride, &data_->vertices[0].rgba );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -425,8 +430,8 @@ void app::Model::bind( ) {
     glEnableClientState( GL_COLOR_ARRAY );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
-    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
+    glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
+    glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -542,8 +547,8 @@ void app::Model::bind( ) {
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
     glEnableVertexAttribArray( Data::Attrib_Pos );
     glEnableVertexAttribArray( Data::Attrib_Color );
-    glVertexAttribPointer( Data::Attrib_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
-    glVertexAttribPointer( Data::Attrib_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
+    glVertexAttribPointer( Data::Attrib_Pos, Vertex_Position_Size, Vertex_Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
+    glVertexAttribPointer( Data::Attrib_Color, Vertex_Color_Size, Vertex_Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
     glUseProgram( data_->idProgram );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
