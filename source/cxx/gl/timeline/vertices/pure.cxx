@@ -2,6 +2,7 @@
 #include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
+#include <son8/c/char.hxx>
 #include <son8/c/byte.hxx>
 #include <son8/c/file.hxx>
 // son8 wrappers
@@ -10,7 +11,7 @@
 /**
  * Vertices Pure Timeline Examples
  */
-#define APP_TIMELINE APP_TIMELINE_BUFFER
+#define APP_TIMELINE APP_TIMELINE_SHADER
 
 // TODO: rewrite it using mostly `c` style coding, like raw loops, no exceptions leaked
 // \ `wrap` version should use modern techniques instead
@@ -198,6 +199,21 @@ namespace app {
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
         Size verticesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_SHADER
+        typedef GLuint Program;
+        typedef GLuint Attrib;
+        static constexpr Attrib Attrib_Pos = 0;
+        static constexpr Attrib Attrib_Color = 1;
+        Program idProgram;
+        static constexpr auto Index_VBO = 0;
+        static constexpr auto Index_EBO = 1;
+        static constexpr auto Buffer_Count = 2;
+        Data_Buffer buffers[Buffer_Count];
+        Vertex *vertices;
+        Data_Index *indices;
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+        Size verticesCount = 0;
 #endif
     }; // struct Data
 
@@ -209,7 +225,7 @@ namespace app {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].xy.x;
     }
-#if APP_TIMELINE == APP_TIMELINE_BUFFER
+#if APP_TIMELINE == APP_TIMELINE_BUFFER || APP_TIMELINE == APP_TIMELINE_SHADER
     Data_Buffer data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
     Data_Buffer data_buffer_ebo( Data const *data ) { return data->buffers[Data::Index_EBO]; }
 #endif
@@ -428,9 +444,129 @@ void app::Model::clean( ) {
     glDeleteBuffers( Data::Buffer_Count, data_->buffers );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
+#elif APP_TIMELINE == APP_TIMELINE_SHADER
+bool app::Model::setup( ) {
+    char const *codeShared = R"GLSL(#version 120
+    varying vec4 vColor;
+)GLSL";
+
+    char const *codeVertex = R"GLSL(
+    attribute vec2 aPos;
+    attribute vec4 aColor;
+
+void main( ) {
+    gl_Position = vec4( aPos, 0.0, 1.0 );
+    vColor = aColor;
+}
+    )GLSL";
+
+    char const *codeFragment = R"GLSL(
+void main( ) {
+    gl_FragColor = vColor.rgba;
+}
+    )GLSL";
+
+    data_->idProgram = glCreateProgram( );
+    Data::Program idProgram = data_->idProgram;
+    GLuint idVertex = glCreateShader( GL_VERTEX_SHADER );
+    GLuint idFragment = glCreateShader( GL_FRAGMENT_SHADER );
+    APP_ASSERT( idProgram and idVertex and idFragment );
+    glAttachShader( idProgram, idVertex );
+    glAttachShader( idProgram, idFragment );
+    char const *sourcesVertex[] = { codeShared, codeVertex };
+    char const *sourcesFragment[] = { codeShared, codeFragment };
+
+    glShaderSource( idVertex, 2, sourcesVertex, nullptr );
+    glShaderSource( idFragment, 2, sourcesFragment, nullptr );
+
+    glCompileShader( idVertex );
+    glCompileShader( idFragment );
+
+    glBindAttribLocation( idProgram, Data::Attrib_Pos, "aPos" );
+    glBindAttribLocation( idProgram, Data::Attrib_Color, "aColor" );
+
+    glLinkProgram( idProgram );
+    GLint statusProgram = GL_FALSE;
+    glGetProgramiv( idProgram, GL_LINK_STATUS, &statusProgram );
+    auto info = [&]{
+        APP_ASSERT( not statusProgram );
+        int v = 0; int f = 1; int p = 2;
+        GLint len[3] = { };
+        c::fprintf( stderr, "info log:\n" );
+        glGetShaderiv( idVertex, GL_INFO_LOG_LENGTH, &len[v] );
+        glGetShaderiv( idFragment, GL_INFO_LOG_LENGTH, &len[f] );
+        glGetProgramiv( idProgram, GL_INFO_LOG_LENGTH, &len[p] );
+        GLint totalLen =  len[v] + len[f] + len[p] + 1;
+        GLint writed1 = 0, writed2 = 0;
+        char *infoLog = (char *)c::malloc( totalLen );
+        infoLog[0] = '\0';
+        glGetShaderInfoLog( idVertex, len[v], &writed1, infoLog );
+        glGetShaderInfoLog( idFragment, len[f], &writed2, infoLog + writed1 );
+        glGetProgramInfoLog( idProgram, len[p], nullptr, infoLog + writed1 + writed2 );
+        c::fprintf( stderr, "%s\n", infoLog );
+        c::free( infoLog );
+    };
+
+    if ( not statusProgram ) { info( ); return false; }
+    // clean, not needed after attach
+    glDetachShader( idProgram, idVertex );
+    glDetachShader( idProgram, idFragment );
+    glDeleteShader( idVertex );
+    glDeleteShader( idFragment );
+    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
+    data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
+
+    if ( not data_->vertices or not data_->indices ) { return false; }
+
+    c::memcpy( data_->vertices, &data_->vertices_[0], sizeof( data_->vertices_ ));
+    c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
+    data_->verticesCount = Data_Vertices_Count_;
+    data_->indicesCount = Data_Indices_Count_;
+    glGenBuffers( Data::Buffer_Count, data_->buffers );
+    glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
+    glBufferData( GL_ARRAY_BUFFER, data_->verticesCount * sizeof( Vertex ), data_->vertices, GL_STATIC_DRAW );
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Data_Index ), data_->indices, GL_STATIC_DRAW );
+    c::free( data_->vertices );
+    c::free( data_->indices );
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+
+    return true;
+}
+
+void app::Model::bind( ) {
+    glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
+    glEnableVertexAttribArray( Data::Attrib_Pos );
+    glEnableVertexAttribArray( Data::Attrib_Color );
+    glVertexAttribPointer( Data::Attrib_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
+    glVertexAttribPointer( Data::Attrib_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
+    glUseProgram( data_->idProgram );
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+}
+
+void app::Model::draw( ) {
+    glDrawElements(GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero);
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+}
+
+void app::Model::free( ) {
+    glUseProgram( Zero );
+    glDisableVertexAttribArray( Data::Attrib_Color );
+    glDisableVertexAttribArray( Data::Attrib_Pos );
+    glBindBuffer( GL_ARRAY_BUFFER, Zero );
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+}
+
+void app::Model::clean( ) {
+    glDeleteProgram( data_->idProgram );
+    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+}
 #else
 // TODO: shaders vertex array object, named buffers and so on
-bool app::Model::setup( ) { return true }
+bool app::Model::setup( ) { return true; }
 
 void app::Model::bind( ) { }
 
