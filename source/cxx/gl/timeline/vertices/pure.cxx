@@ -17,9 +17,10 @@
 
 namespace app {
 
-
-
-    inline constexpr char const *Timeline_Title = "Pure timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
+    inline constexpr char const *Window_Title = "Pure timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
+    inline constexpr GLuint Window_W = 640u;
+    inline constexpr GLuint Window_H = 360u;
+    inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
 
     enum Flag : unsigned {
         Flag_Goto_Printed_Bit = 1u << 0u,
@@ -58,7 +59,7 @@ void son8::main( Args args ) {
     App const *app = appPtr;
     if ( not glfwInit( )) { goto failed_init; }
 
-    appData.window = glfwCreateWindow( 640, 360, Timeline_Title, nullptr, nullptr );
+    appData.window = glfwCreateWindow( Window_W, Window_H, Window_Title, nullptr, nullptr );
 
     if ( not appData.window ) { goto failed_window; }
 
@@ -67,6 +68,7 @@ void son8::main( Args args ) {
     if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
 
     if ( not appData.model.setup( )) { goto failed_setup; }
+
 
     while ( not glfwWindowShouldClose( app->window )) try {
         glfwPollEvents( );
@@ -131,8 +133,8 @@ namespace app {
     static_assert( offsetof( Vertex, pad ) == 12
         , "pad offset must be 12");
 
-    static constexpr auto Data_Vertices_Count_ = 4;
-    static constexpr auto Data_Indices_Count_ = 6;
+    static constexpr auto Data_Vertices_Count_ = 14;
+    static constexpr auto Data_Indices_Count_ = 36;
     typedef Vertex Data_Vertices_[Data_Vertices_Count_];
     typedef GLubyte Data_Index;
     typedef Data_Index Data_Indices_[Data_Indices_Count_];
@@ -141,14 +143,40 @@ namespace app {
 
     struct Data {
         Data_Vertices_ vertices_ = {
-            { .xy = {-.8,-.8}, .rgba = {255u, Zero, Zero, 255u }},
-            { .xy = { .8,-.8}, .rgba = {Zero, 255u, Zero, 255u }},
-            { .xy = { .8, .8}, .rgba = {Zero, Zero, 255u, 255u }},
-            { .xy = {-.8, .8}, .rgba = {255u, 255u, 255u, 255u }},
+            { .xy = {0.0f,-.2f}, .rgba = { Zero,Zero,Zero,255u }}, // 0
+            { .xy = {0.0f,+.2f}, .rgba = { Zero,255u,Zero,255u }}, // 1
+            { .xy = {+.2f,+.2f}, .rgba = { 255u,255u,Zero,255u }}, // 2
+            { .xy = {+.2f,-.2f}, .rgba = { 255u,Zero,Zero,255u }}, // 3
+            { .xy = {-.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 4
+            { .xy = {-.2f,-.2f}, .rgba = { Zero,Zero,255u,255u }}, // 5
+            { .xy = {-.2f,+.2f}, .rgba = { Zero,255u,255u,255u }}, // 6
+            { .xy = {-.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 7
+            { .xy = {+.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 8
+            { .xy = {+.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 9
+            { .xy = {+.2f,-.6f}, .rgba = { 255u,Zero,255u,255u }}, // 10
+            { .xy = {0.0f,-.6f}, .rgba = { Zero,Zero,255u,255u }}, // 11
+            { .xy = {0.0f,+.6f}, .rgba = { Zero,255u,255u,255u }}, // 12
+            { .xy = {+.2f,+.6f}, .rgba = { 255u,255u,255u,255u }}, // 13
         };
         Data_Indices_ indices_ = {
-            0u, 1u, 2u,
-            2u, 3u, 0u
+            // back
+             0u, 3u, 2u,
+             0u, 2u, 1u,
+            // front
+             4u, 5u, 6u,
+             4u, 6u, 7u,
+            // left
+             5u, 0u, 1u,
+             5u, 1u, 6u,
+            // right
+             3u, 8u, 9u,
+             3u, 9u, 2u,
+            // bottom
+            11u,10u, 3u,
+            11u, 3u, 0u,
+            // top
+             1u, 2u,13u,
+             1u,13u,12u
         };
 #if APP_TIMELINE == APP_TIMELINE_LIST
         Data_List list;
@@ -173,11 +201,11 @@ namespace app {
 #endif
     }; // struct Data
 
-    Vertex::Color_Type const *data_rgba_v( Data const *data, Size i ) {
+    Vertex::Color_Type const *data_color_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].rgba.r;
     }
-    Vertex::Position_Type const *data_xy_v( Data const *data, Size i ) {
+    Vertex::Position_Type const *data_vertex_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
         return &data->vertices_[index].xy.x;
     }
@@ -187,7 +215,7 @@ namespace app {
 #endif
 
 }
-// Vertices RAII
+// Model RAII
 app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
 // timelines
@@ -198,8 +226,8 @@ void app::Model::bind( ) { }
 void app::Model::draw( ) {
     glBegin( GL_TRIANGLES );
     for ( Size i = 0; i < Data_Indices_Count_; ++i ) {
-        glColor4ubv( data_rgba_v( data_, i ));
-        glVertex2fv( data_xy_v( data_, i ));
+        glColor4ubv( data_color_v( data_, i ));
+        glVertex2fv( data_vertex_v( data_, i ));
     }
     glEnd( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
@@ -215,8 +243,8 @@ bool app::Model::setup( ) {
     glNewList( list, GL_COMPILE );
     glBegin( GL_TRIANGLES );
     for ( Size i = 0; i < Data_Indices_Count_; ++i ) {
-        glColor4ubv( data_rgba_v( data_, i ));
-        glVertex2fv( data_xy_v( data_, i ));
+        glColor4ubv( data_color_v( data_, i ));
+        glVertex2fv( data_vertex_v( data_, i ));
     }
     glEnd( );
     glEndList( );
@@ -246,8 +274,8 @@ bool app::Model::setup( ) {
     if ( not data_->positions or not data_->colors ) return false;
 
     for ( Size i = 0u; i < size; ++i ) {
-        c::memcpy( data_->positions + i, data_xy_v( data_, i ), sizeof( Vertex::Position ));
-        c::memcpy( data_->colors + i, data_rgba_v( data_, i ), sizeof( Vertex::Color ));
+        c::memcpy( data_->positions + i, data_vertex_v( data_, i ), sizeof( Vertex::Position ));
+        c::memcpy( data_->colors + i, data_color_v( data_, i ), sizeof( Vertex::Color ));
     }
 
     return true;
