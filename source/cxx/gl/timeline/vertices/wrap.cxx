@@ -26,7 +26,7 @@
 #endif // overglad include
 
 namespace app {
-
+    using namespace core;
     namespace gl = overglad;
 
     using Error = cxx::runtime_error;

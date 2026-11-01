@@ -2,6 +2,7 @@
 #include "vertices.hxx"
 // son8
 #include <son8/main.hxx>
+#include <son8/core/alias/pour.hxx>
 #include <son8/c/char.hxx>
 #include <son8/c/byte.hxx>
 #include <son8/c/file.hxx>
@@ -17,6 +18,8 @@
 // \ `wrap` version should use modern techniques instead
 
 namespace app {
+
+    using namespace son8::core;
 
     inline constexpr char const *Window_Title = "Pure timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
     inline constexpr GLuint Window_W = 640u;

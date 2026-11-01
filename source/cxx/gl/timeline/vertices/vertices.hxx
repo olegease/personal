@@ -3,8 +3,6 @@
 
 #include <cassert>
 
-#include <son8/core/alias/pour.hxx>
-
 // TODO: wrap the model into special class that would allow to
 // \ choose `OpenGL` version for vertices processing for future timelines
 
@@ -14,8 +12,8 @@
 #define APP_TIMELINE_INTERLEAVE 0x0101'2u // Draw Arrays Interleaved
 #define APP_TIMELINE_ELEMENT    0x0101'3u // Draw Elements
 #define APP_TIMELINE_BUFFER     0x0105'0u // Vertex Buffer Objects
+#define APP_TIMELINE_SHADER     0x0201'0u // Vertex and Fragment Shaders, `glsl 120`
 // TODO
-//`#define APP_TIMELINE_SHADER 0x0201'0u` // Vertex and Fragment Shaders, `glsl 120`
 //`#define APP_TIMELINE_OBJECT 0x0303'0u` // Vertex Array Object `glsl 330`
 //`#define APP_TIMELINE_BINARY 0x0403'0u` // Binary Shaders and Program Pipelines `glsl 430`
 //`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
@@ -26,18 +24,17 @@
 #define APP_ASSERT( check ) assert(( check ))
 #define APP_CAST( to, from ) static_cast< to >(( from ))
 
+namespace son8 { }
 
 namespace app {
     using namespace son8;
-    using namespace core;
-
     static constexpr signed Zero = 0;
     static constexpr unsigned Zero_U = 0u;
 
     struct Data;
 
     class Model final {
-        using DataPtr_ = Ptr< Data >;
+        using DataPtr_ = Data *;
         DataPtr_ data_;
       public:
         Model( );
