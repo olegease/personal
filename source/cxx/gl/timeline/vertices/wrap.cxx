@@ -15,12 +15,14 @@
     || APP_TIMELINE == APP_TIMELINE_ARRAY \
     || APP_TIMELINE == APP_TIMELINE_INTERLEAVE \
     || APP_TIMELINE == APP_TIMELINE_ELEMENT
-    #include <son8/overglad/v1_1.hxx>
+#   include <son8/overglad/v1_1.hxx>
+#elif APP_TIMELINE == APP_TIMELINE_SHADER
+#   include <son8/overglad/v2_1.hxx>
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-    #include <son8/overglad/v1_5.hxx>
+#   include <son8/overglad/v1_5.hxx>
 #else
-    #warning "include proper overglad wrapper for specific opengl version"
-    #include <son8/overglad/comp.hxx>
+#   warning "include proper overglad wrapper for specific opengl version"
+#   include <son8/overglad/comp.hxx>
 #endif // overglad include
 /**
  * Vertices Wrap Timeline Examples
@@ -85,18 +87,24 @@ namespace app {
         Grow< Vertex > vertices;
         Grow< Index > indices;
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-        using Buffer = GLuint;
-        static constexpr auto Index_VBO = 0;
-        static constexpr auto Index_EBO = 1;
-        static constexpr auto Buffer_Count = 2;
-        Flat< Buffer, Buffer_Count > buffers;
+        using Vertices = Grow< Vertex >;
+        using Indices = Grow< Index >;
         gl::types::BufferArray vbo;
         gl::types::BufferElement ebo;
-        Grow< Vertex > vertices;
-        Grow< Index > indices;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
-        Size verticesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_SHADER
+        typedef GLuint Program;
+        typedef GLuint Attrib;
+        static constexpr Attrib Attrib_Pos = 0;
+        static constexpr Attrib Attrib_Color = 1;
+        Program idProgram;
+        gl::types::BufferArray bufferArray;
+        gl::types::BufferElement bufferElement;
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+#else
+#warning "no data for timeline"
 #endif
     };
 
@@ -251,20 +259,20 @@ void app::Model::free( ) {
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
 bool app::Model::setup( Ref< RawData > raw ) try {
-    data_->verticesCount = raw.vertices( ).size( );
+    Size verticesCount = raw.vertices( ).size( );
     data_->indicesCount = raw.indices( ).size( );
-    data_->vertices.resize( data_->verticesCount );
-    data_->indices.resize( data_->indicesCount );
-    cxx::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), data_->vertices.begin( ));
-    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), data_->indices.begin( ));
+    Data::Vertices vertices( verticesCount );
+    Data::Indices indices( data_->indicesCount );
+    cxx::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), vertices.begin( ));
+    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), indices.begin( ));
     gl::gen( data_->vbo );
     gl::gen( data_->ebo );
     gl::bind( data_->vbo );
-    gl::buffer_data( GL_ARRAY_BUFFER, data_->vertices.size( ) * sizeof( Vertex ), data_->vertices.data( ), GL_STATIC_DRAW );
+    gl::buffer_data( GL_ARRAY_BUFFER, vertices.size( ) * sizeof( Vertex ), vertices.data( ), GL_STATIC_DRAW );
     gl::bind( data_->ebo );
-    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, data_->indices.size( ) * sizeof( Index ), data_->indices.data( ), GL_STATIC_DRAW );
-    data_->vertices.clear( );
-    data_->indices.clear( );
+    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, indices.size( ) * sizeof( Index ), indices.data( ), GL_STATIC_DRAW );
+    vertices.clear( );
+    indices.clear( );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
     return true;
 
@@ -299,6 +307,18 @@ void app::Model::clean( ) {
     gl::del( data_->ebo );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
+#elif APP_TIMELINE == APP_TIMELINE_SHADER
+bool app::Model::setup( Ref< RawData > raw ) try {
+    return true;
+} catch ( ... ) { return false; }
+
+void app::Model::bind( ) { }
+
+void app::Model::draw( ) { }
+
+void app::Model::free( ) { }
+
+void app::Model::clean( ) { }
 #else
 #warning "timeline model interface not implemented"
 bool app::Model::setup( Ref< RawData > raw ) try { return true; } catch ( ... ) { return false; }
