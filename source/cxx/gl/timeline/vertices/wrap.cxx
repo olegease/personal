@@ -35,6 +35,7 @@ namespace app {
 
     struct App {
         Model model;
+        RawData data;
     };
 }
 
@@ -54,7 +55,7 @@ void son8::main( Args args ) {
 
     if ( window.is_error( window.bind_opengl( ))) { throw Error{ "cannot bind opengl" }; }
 
-    if ( not appOut.model.setup( )) { throw Error{ "setup model failed" }; }
+    if ( not appOut.model.setup( app.data )) { throw Error{ "setup model failed" }; }
 
     window.free_opengl( );
     window.run( [&appOut]{
@@ -69,80 +70,10 @@ void son8::main( Args args ) {
 
 namespace app {
 
-    struct Vertex {
-        static constexpr GLenum Position_Type_GL = GL_FLOAT;
-        static constexpr GLenum Color_Type_GL = GL_UNSIGNED_BYTE;
-        static constexpr auto Position_Size = 2;
-        static constexpr auto Color_Size = 4;
-        static constexpr auto Pad_Size = 4;
-        using Position_Type = GLfloat;
-        using Color_Type = GLubyte;
-        using Position = Flat< Position_Type, Position_Size >;
-        using Color = Flat< Color_Type, Color_Size >;
-        Position xy;
-        Color rgba;
-        GLubyte pad[Pad_Size];
-    };
-    static_assert( sizeof(Vertex) == 16
-        , "Vertex must be exactly 16 bytes for cache line alignment" );
-    static_assert( offsetof( Vertex, xy ) == 0
-        , "xy offset must be 0" );
-    static_assert( offsetof( Vertex, rgba ) == 8
-        , "rgba offset must be 8" );
-    static_assert( offsetof( Vertex, pad ) == 12
-        , "pad offset must be 12");
-
-    class Data final {
-        static constexpr auto Vertices_Count_ = 14;
-        static constexpr auto Indices_Count_ = 36;
-        using Vertices_ = Flat< Vertex, Vertices_Count_ >;
-        using Index_ = GLubyte;
-        using Indices_ = Flat< Index_, Indices_Count_ >;
-        Vertices_ vertices_ = {{
-            { .xy = {0.0f,-.2f}, .rgba = { Zero,Zero,Zero,255u }}, // 0
-            { .xy = {0.0f,+.2f}, .rgba = { Zero,255u,Zero,255u }}, // 1
-            { .xy = {+.2f,+.2f}, .rgba = { 255u,255u,Zero,255u }}, // 2
-            { .xy = {+.2f,-.2f}, .rgba = { 255u,Zero,Zero,255u }}, // 3
-            { .xy = {-.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 4
-            { .xy = {-.2f,-.2f}, .rgba = { Zero,Zero,255u,255u }}, // 5
-            { .xy = {-.2f,+.2f}, .rgba = { Zero,255u,255u,255u }}, // 6
-            { .xy = {-.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 7
-            { .xy = {+.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 8
-            { .xy = {+.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 9
-            { .xy = {+.2f,-.6f}, .rgba = { 255u,Zero,255u,255u }}, // 10
-            { .xy = {0.0f,-.6f}, .rgba = { Zero,Zero,255u,255u }}, // 11
-            { .xy = {0.0f,+.6f}, .rgba = { Zero,255u,255u,255u }}, // 12
-            { .xy = {+.2f,+.6f}, .rgba = { 255u,255u,255u,255u }}, // 13
-        }};
-        Indices_ indices_ = {
-            // back
-             0u, 3u, 2u,
-             0u, 2u, 1u,
-            // front
-             4u, 5u, 6u,
-             4u, 6u, 7u,
-            // left
-             5u, 0u, 1u,
-             5u, 1u, 6u,
-            // right
-             3u, 8u, 9u,
-             3u, 9u, 2u,
-            // bottom
-            11u,10u, 3u,
-            11u, 3u, 0u,
-            // top
-             1u, 2u,13u,
-             1u,13u,12u
-        };
-    public:
-        using Index = Index_;
-        auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
-        auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
-        auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
-        auto xy_v( Index index ) const -> Ptr< Vertex::Position_Type const > { return xy( index ).data( ); }
-        auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgba; }
-        auto rgb_v( Index index ) const -> Ptr< Vertex::Color_Type const > { return rgb( index ).data( ); }
-#if APP_TIMELINE == APP_TIMELINE_LIST
+    struct Data final {
+#if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
+        Grow< Vertex > vertices;
+#elif APP_TIMELINE == APP_TIMELINE_LIST
         using List = GLuint;
         List list{ };
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
@@ -176,26 +107,34 @@ app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
 // timelines
 #if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
-bool app::Model::setup( ) try { return true; } catch ( ... ) { return false; }
+bool app::Model::setup( Ref< RawData > raw ) try {
+    data_->vertices.reserve( raw.indices( ).size( ));
+
+    for ( auto index : raw.indices( )) {
+        data_->vertices.emplace_back( raw.xy( index ), raw.rgb( index ));
+    }
+
+    return true;
+} catch ( ... ) { return false; }
 void app::Model::bind( ) { }
 void app::Model::draw( ) {
     gl::begin( gl::enums::Draw::Triangles );
-    for ( auto index : data_->raw_indices( )) {
-        gl::color( data_->rgb( index ));
-        gl::vertex( data_->xy( index ));
+    for ( auto vertex : data_->vertices ) {
+        gl::color( vertex.rgba );
+        gl::vertex( vertex.xy );
     }
     gl::end( );
 }
 void app::Model::free( ) { }
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_LIST
-bool app::Model::setup( ) try {
+bool app::Model::setup( Ref< RawData > raw ) try {
     data_->list = gl::gen_lists( 1 );
     gl::new_list( data_->list, GL_COMPILE );
     gl::begin( gl::enums::Draw::Triangles );
-    for ( auto index : data_->raw_indices( )) {
-        gl::color( data_->rgb( index ));
-        gl::vertex( data_->xy( index ));
+    for ( auto index : raw.indices( )) {
+        gl::color( raw.rgb( index ));
+        gl::vertex( raw.xy( index ));
     }
     gl::end( );
     gl::end_list( );
@@ -214,13 +153,13 @@ void app::Model::free( ) { }
 
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
-bool app::Model::setup( ) try {
-    Size size = data_->raw_indices( ).size( );
+bool app::Model::setup( Ref< RawData > raw ) try {
+    Size size = raw.indices( ).size( );
     data_->colors.reserve( size );
     data_->positions.reserve( size );
-    for ( auto index : data_->raw_indices( )) {
-        data_->colors.emplace_back( data_->rgb( index ));
-        data_->positions.emplace_back( data_->xy( index ));
+    for ( auto index : raw.indices( )) {
+        data_->colors.emplace_back( raw.rgb( index ));
+        data_->positions.emplace_back( raw.xy( index ));
     }
 
     return true;
@@ -247,11 +186,11 @@ void app::Model::free( ) {
 
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
-bool app::Model::setup( ) try {
-    data_->vertices.reserve( data_->raw_indices( ).size( ));
+bool app::Model::setup( Ref< RawData > raw ) try {
+    data_->vertices.reserve( raw.indices( ).size( ));
 
-    for ( auto index : data_->raw_indices( )) {
-        data_->vertices.emplace_back( Vertex{ data_->xy( index ), data_->rgb( index )});
+    for ( auto index : raw.indices( )) {
+        data_->vertices.emplace_back( raw.xy( index ), raw.rgb( index ));
     }
 
     return true;
@@ -279,13 +218,13 @@ void app::Model::free( ) {
 
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
-bool app::Model::setup( ) try {
-    data_->vertices.reserve( data_->raw_vertices( ).size( ));
-    for ( Ref< Vertex > vertex : data_->raw_vertices( )) {
+bool app::Model::setup( Ref< RawData > raw ) try {
+    data_->vertices.reserve( raw.vertices( ).size( ));
+    for ( Ref< Vertex > vertex : raw.vertices( )) {
         data_->vertices.emplace_back( vertex );
     }
-    data_->indices.resize( data_->raw_indices( ).size( ));
-    cxx::copy( data_->raw_indices( ).begin( ), data_->raw_indices( ).end( ), data_->indices.begin( ));
+    data_->indices.resize( raw.indices( ).size( ));
+    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), data_->indices.begin( ));
 
     return true;
 } catch ( ... ) { return false; }
@@ -311,19 +250,19 @@ void app::Model::free( ) {
 }
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-bool app::Model::setup( ) try {
-    data_->verticesCount = data_->raw_vertices( ).size( );
-    data_->indicesCount = data_->raw_indices( ).size( );
+bool app::Model::setup( Ref< RawData > raw ) try {
+    data_->verticesCount = raw.vertices( ).size( );
+    data_->indicesCount = raw.indices( ).size( );
     data_->vertices.resize( data_->verticesCount );
     data_->indices.resize( data_->indicesCount );
-    cxx::copy( data_->raw_vertices( ).begin( ), data_->raw_vertices( ).end( ), data_->vertices.begin( ));
-    cxx::copy( data_->raw_indices( ).begin( ), data_->raw_indices( ).end( ), data_->indices.begin( ));
+    cxx::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), data_->vertices.begin( ));
+    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), data_->indices.begin( ));
     gl::gen( data_->vbo );
     gl::gen( data_->ebo );
     gl::bind( data_->vbo );
     gl::buffer_data( GL_ARRAY_BUFFER, data_->vertices.size( ) * sizeof( Vertex ), data_->vertices.data( ), GL_STATIC_DRAW );
     gl::bind( data_->ebo );
-    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, data_->indices.size() * sizeof( Data::Index ), data_->indices.data( ), GL_STATIC_DRAW );
+    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, data_->indices.size( ) * sizeof( Index ), data_->indices.data( ), GL_STATIC_DRAW );
     data_->vertices.clear( );
     data_->indices.clear( );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
@@ -361,7 +300,8 @@ void app::Model::clean( ) {
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 #else
-bool app::Model::setup( ) try { return true; } catch ( ... ) { return false; }
+#warning "timeline model interface not implemented"
+bool app::Model::setup( Ref< RawData > raw ) try { return true; } catch ( ... ) { return false; }
 
 void app::Model::bind( ) { }
 

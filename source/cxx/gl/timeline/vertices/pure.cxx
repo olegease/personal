@@ -26,6 +26,7 @@ namespace app {
 
     struct App {
         Model model;
+        RawData data;
         GLFWwindow *window{ };
         unsigned flags{ };
     };
@@ -68,7 +69,7 @@ void son8::main( Args args ) {
 
     if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
 
-    if ( not appData.model.setup( )) { goto failed_setup; }
+    if ( not appData.model.setup( app->data )) { goto failed_setup; }
 
     while ( not glfwWindowShouldClose( app->window )) try {
         glfwPollEvents( );
@@ -116,20 +117,6 @@ namespace app {
 
     typedef Vertex_Position_Type Vertex_Position[Vertex_Position_Size];
     typedef Vertex_Color_Type Vertex_Color[Vertex_Color_Size];
-
-    struct Vertex {
-        Vertex_Position xy;
-        Vertex_Color rgba;
-        GLubyte pad[Vertex_Pad_Size];
-    };
-    static_assert( sizeof(Vertex) == 16
-        , "Vertex must be exactly 16 bytes for cache line alignment" );
-    static_assert( offsetof( Vertex, xy ) == 0
-        , "xy offset must be 0" );
-    static_assert( offsetof( Vertex, rgba ) == 8
-        , "rgba offset must be 8" );
-    static_assert( offsetof( Vertex, pad ) == 12
-        , "pad offset must be 12");
 
     static constexpr auto Data_Vertices_Count_ = 14;
     static constexpr auto Data_Indices_Count_ = 36;
@@ -250,7 +237,7 @@ app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
 // timelines
 #if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
-bool app::Model::setup( ) { return true; }
+bool app::Model::setup( RawData const & raw ) { return true; }
 void app::Model::bind( ) { }
 
 void app::Model::draw( ) {
@@ -267,7 +254,7 @@ void app::Model::free( ) { }
 
 void app::Model::clean( ) { }
 #elif APP_TIMELINE == APP_TIMELINE_LIST
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     Ref< Data_List > list = data_->list;
     data_->list = glGenLists( 1 );
     glNewList( list, GL_COMPILE );
@@ -296,7 +283,7 @@ void app::Model::clean( ) {
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     Size size = Data_Indices_Count_;
     data_->positions = ( Vertex_Position *)c::malloc( sizeof(Vertex_Position) * size );
     data_->colors = ( Vertex_Color *)c::malloc( sizeof(Vertex_Color) * size );
@@ -335,7 +322,7 @@ void app::Model::clean( ) {
     c::free( data_->colors );
 }
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     Size size = Data_Indices_Count_;
     data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * size );
 
@@ -372,7 +359,7 @@ void app::Model::clean( ) {
     c::free( data_->vertices );
 }
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
     data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
 
@@ -409,7 +396,7 @@ void app::Model::clean( ) {
     c::free( data_->indices );
 }
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
     data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
 
@@ -459,7 +446,7 @@ void app::Model::clean( ) {
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     char const *codeShared = R"GLSL(#version 120
     varying vec4 vColor;
 )GLSL";
