@@ -1,5 +1,5 @@
 #define APP_TYPE_WRAP
-#define APP_TIMELINE APP_TIMELINE_BUFFER
+//#define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
 // son8
 #include <son8/core/alias/data.hxx>
@@ -40,6 +40,7 @@ namespace app {
 
 void son8::main( Args args ) {
     using namespace app;
+    std::string title = std::string{ "Wrap " } + Window_Title;
 
     App appOut;
     Ref< App > app = appOut;
@@ -47,7 +48,7 @@ void son8::main( Args args ) {
     WindowConfig windowCfg{ SON8_OVERGLAD_VERSION };
     windowCfg.set( WindowConfig::Width{ Window_W });
     windowCfg.set( WindowConfig::Height{ Window_H });
-    windowCfg.set( WindowConfig::Title{ Window_Title });
+    windowCfg.set( WindowConfig::Title{ title });
 
     Window window{ windowCfg };
 
@@ -69,41 +70,77 @@ void son8::main( Args args ) {
 namespace app {
 
     struct Vertex {
-        static constexpr GLenum Position_Type_GL = GL_DOUBLE;
-        static constexpr GLenum Color_Type_GL = GL_FLOAT;
+        static constexpr GLenum Position_Type_GL = GL_FLOAT;
+        static constexpr GLenum Color_Type_GL = GL_UNSIGNED_BYTE;
         static constexpr auto Position_Size = 2;
-        static constexpr auto Color_Size = 3;
-        using Position_Type = GLdouble;
-        using Color_Type = GLfloat;
+        static constexpr auto Color_Size = 4;
+        static constexpr auto Pad_Size = 4;
+        using Position_Type = GLfloat;
+        using Color_Type = GLubyte;
         using Position = Flat< Position_Type, Position_Size >;
         using Color = Flat< Color_Type, Color_Size >;
         Position xy;
-        Color rgb;
+        Color rgba;
+        GLubyte pad[Pad_Size];
     };
+    static_assert( sizeof(Vertex) == 16
+        , "Vertex must be exactly 16 bytes for cache line alignment" );
+    static_assert( offsetof( Vertex, xy ) == 0
+        , "xy offset must be 0" );
+    static_assert( offsetof( Vertex, rgba ) == 8
+        , "rgba offset must be 8" );
+    static_assert( offsetof( Vertex, pad ) == 12
+        , "pad offset must be 12");
 
     class Data final {
-        static constexpr auto Vertices_Count_ = 4;
-        static constexpr auto Indices_Count_ = 6;
+        static constexpr auto Vertices_Count_ = 14;
+        static constexpr auto Indices_Count_ = 36;
         using Vertices_ = Flat< Vertex, Vertices_Count_ >;
         using Index_ = GLubyte;
         using Indices_ = Flat< Index_, Indices_Count_ >;
-        Vertices_ vertices_{{
-            { .xy = {-.8,-.8}, .rgb = { 1.f, 0.f, 0.f }},
-            { .xy = { .8,-.8}, .rgb = { 0.f, 1.f, 0.f }},
-            { .xy = { .8, .8}, .rgb = { 0.f, 0.f, 1.f }},
-            { .xy = {-.8, .8}, .rgb = { 1.f, 1.f, 1.f }},
+        Vertices_ vertices_ = {{
+            { .xy = {0.0f,-.2f}, .rgba = { Zero,Zero,Zero,255u }}, // 0
+            { .xy = {0.0f,+.2f}, .rgba = { Zero,255u,Zero,255u }}, // 1
+            { .xy = {+.2f,+.2f}, .rgba = { 255u,255u,Zero,255u }}, // 2
+            { .xy = {+.2f,-.2f}, .rgba = { 255u,Zero,Zero,255u }}, // 3
+            { .xy = {-.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 4
+            { .xy = {-.2f,-.2f}, .rgba = { Zero,Zero,255u,255u }}, // 5
+            { .xy = {-.2f,+.2f}, .rgba = { Zero,255u,255u,255u }}, // 6
+            { .xy = {-.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 7
+            { .xy = {+.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 8
+            { .xy = {+.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 9
+            { .xy = {+.2f,-.6f}, .rgba = { 255u,Zero,255u,255u }}, // 10
+            { .xy = {0.0f,-.6f}, .rgba = { Zero,Zero,255u,255u }}, // 11
+            { .xy = {0.0f,+.6f}, .rgba = { Zero,255u,255u,255u }}, // 12
+            { .xy = {+.2f,+.6f}, .rgba = { 255u,255u,255u,255u }}, // 13
         }};
-        Indices_ indices_{{
-            0u, 1u, 2u,
-            2u, 3u, 0u
-        }};
+        Indices_ indices_ = {
+            // back
+             0u, 3u, 2u,
+             0u, 2u, 1u,
+            // front
+             4u, 5u, 6u,
+             4u, 6u, 7u,
+            // left
+             5u, 0u, 1u,
+             5u, 1u, 6u,
+            // right
+             3u, 8u, 9u,
+             3u, 9u, 2u,
+            // bottom
+            11u,10u, 3u,
+            11u, 3u, 0u,
+            // top
+             1u, 2u,13u,
+             1u,13u,12u
+        };
     public:
         using Index = Index_;
         auto raw_vertices( ) const -> Ref< Vertices_ > { return vertices_; }
         auto raw_indices( ) const -> Ref< Indices_ > { return indices_; }
         auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
         auto xy_v( Index index ) const -> Ptr< Vertex::Position_Type const > { return xy( index ).data( ); }
-        auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgb; }
+        auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgba; }
         auto rgb_v( Index index ) const -> Ptr< Vertex::Color_Type const > { return rgb( index ).data( ); }
 #if APP_TIMELINE == APP_TIMELINE_LIST
         using List = GLuint;
@@ -225,7 +262,7 @@ void app::Model::bind( ) {
     gl::enable( gl::enums::ClientState::Color );
     static constexpr auto stride = sizeof( Vertex );
     gl::vertex_pointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[Zero].xy );
-    gl::color_pointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[Zero].rgb );
+    gl::color_pointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[Zero].rgba );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 
@@ -258,7 +295,7 @@ void app::Model::bind( ) {
     gl::enable( gl::enums::ClientState::Color );
     static constexpr auto stride = sizeof( Vertex );
     glVertexPointer( Vertex::Position_Size, Vertex::Position_Type_GL, stride, &data_->vertices[0].xy );
-    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[0].rgb );
+    glColorPointer( Vertex::Color_Size, Vertex::Color_Type_GL, stride, &data_->vertices[0].rgba );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 
@@ -301,7 +338,7 @@ void app::Model::bind( ) {
     gl::bind( data_->vbo );
     gl::bind( data_->ebo );
     gl::vertex_pointer( Vertex::Position_Size, Vertex::Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
-    gl::color_pointer( Vertex::Color_Size, Vertex::Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgb ));
+    gl::color_pointer( Vertex::Color_Size, Vertex::Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 

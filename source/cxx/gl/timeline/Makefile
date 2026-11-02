@@ -1,4 +1,4 @@
-.PHONY: setup
+.PHONY: usage setup cmake ninja clean
 
 BUILD := build
 SON8PATH := $(HOME)/code/ghub/soneight
@@ -12,10 +12,15 @@ setup:
 	@mkdir -p $(BUILD)
 
 cmake:
-	@cmake -B $(BUILD) -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	@cmake -B $(BUILD) -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_COLOR_DIAGNOSTICS=ON
 
 ninja:
 	@ninja -C $(BUILD)
+
+run:
+	@make ninja
+	@./$(BUILD)/vertices-pure
+	@./$(BUILD)/vertices-wrap
 
 clean:
 	@rm -f son8

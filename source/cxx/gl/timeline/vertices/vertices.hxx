@@ -19,6 +19,9 @@
 //`#define APP_TIMELINE_BINARY 0x0403'0u` // Binary Shaders and Program Pipelines `glsl 430`
 //`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
 
+// TODO remove later
+#define APP_TIMELINE APP_TIMELINE_BUFFER
+
 #define APP_STRINGIFY( x ) #x
 #define APP_STRINGIFY_EXPAND( x ) APP_STRINGIFY( x )
 

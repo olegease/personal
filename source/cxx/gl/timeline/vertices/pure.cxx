@@ -1,5 +1,5 @@
 #define APP_TYPE_PURE
-#define APP_TIMELINE APP_TIMELINE_BUFFER
+//#define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
 // `son8`
 #include <son8/main.hxx>
@@ -47,6 +47,7 @@ namespace app {
 
 void son8::main( Args args ) {
     using namespace app;
+    std::string title = std::string{ "Pure " } + Window_Title;
     // operations on same stack frame
     App appData;
     // passing to mutation functions
@@ -58,7 +59,7 @@ void son8::main( Args args ) {
     glfwDefaultWindowHints( );
     glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
 
-    appData.window = glfwCreateWindow( Window_W, Window_H, Window_Title, nullptr, nullptr );
+    appData.window = glfwCreateWindow( Window_W, Window_H, title.c_str( ), nullptr, nullptr );
 
     if ( not appData.window ) { goto failed_window; }
     // NOTE: fix for tiled window managers
@@ -108,26 +109,19 @@ namespace app {
     typedef GLfloat Vertex_Position_Type;
     typedef GLubyte Vertex_Color_Type;
 
-    struct Vertex_Data_Position {
-        Vertex_Position_Type x, y;
-    };
-
-    struct Vertex_Data_Color {
-        Vertex_Color_Type r, g, b, a;
-    };
-
     static constexpr GLenum Vertex_Position_Type_GL = GL_FLOAT;
     static constexpr GLenum Vertex_Color_Type_GL = GL_UNSIGNED_BYTE;
     static constexpr auto Vertex_Position_Size = 2;
     static constexpr auto Vertex_Color_Size = 4;
+    static constexpr auto Vertex_Pad_Size = 4;
 
-    typedef Vertex_Data_Position Vertex_Position;
-    typedef Vertex_Data_Color Vertex_Color;
+    typedef Vertex_Position_Type Vertex_Position[Vertex_Position_Size];
+    typedef Vertex_Color_Type Vertex_Color[Vertex_Color_Size];
 
     struct Vertex {
         Vertex_Position xy;
         Vertex_Color rgba;
-        GLubyte pad[4];
+        GLubyte pad[Vertex_Pad_Size];
     };
     static_assert( sizeof(Vertex) == 16
         , "Vertex must be exactly 16 bytes for cache line alignment" );
@@ -240,11 +234,11 @@ namespace app {
 
     Vertex_Color_Type const *data_color_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
-        return &data->vertices_[index].rgba.r;
+        return &data->vertices_[index].rgba[0];
     }
     Vertex_Position_Type const *data_vertex_v( Data const *data, Size i ) {
         Data_Index index = data->indices_[i];
-        return &data->vertices_[index].xy.x;
+        return &data->vertices_[index].xy[0];
     }
 #if APP_TIMELINE >= APP_TIMELINE_BUFFER
     Data_Buffer data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
