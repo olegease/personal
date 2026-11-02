@@ -3,9 +3,8 @@
 #include "vertices.hxx"
 // `son8`
 #include <son8/main.hxx>
-#include <son8/core/alias/pour.hxx>
-#include <son8/c/char.hxx>
 #include <son8/c/byte.hxx>
+#include <son8/c/char.hxx>
 #include <son8/c/file.hxx>
 // `son8` pure wrappers
 #include <glfw/son8.hxx>

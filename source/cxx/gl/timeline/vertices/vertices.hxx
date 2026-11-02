@@ -1,8 +1,10 @@
 #ifndef APP_VERTICES_HXX
 #define APP_VERTICES_HXX
 
-#include <cassert>
+#include <son8/core/alias/pour.hxx>
 #include <glad/son8/header.h>
+
+#include <cassert>
 
 // TODO: wrap the model into special class that would allow to
 // \ choose `OpenGL` version for vertices processing for future timelines
@@ -20,7 +22,7 @@
 //`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
 
 // TODO remove later
-#define APP_TIMELINE APP_TIMELINE_BUFFER
+#define APP_TIMELINE APP_TIMELINE_IMMEDIATE
 
 #define APP_STRINGIFY( x ) #x
 #define APP_STRINGIFY_EXPAND( x ) APP_STRINGIFY( x )
@@ -28,15 +30,13 @@
 #define APP_ASSERT( check ) assert(( check ))
 #define APP_CAST( to, from ) static_cast< to >(( from ))
 
-// forward declare namespaces
-namespace son8 { namespace core { }}
 
 namespace app {
 
     using namespace son8;
     using namespace son8::core;
 
-    inline constexpr char const *Window_Title = "timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
+    inline constexpr Ptr< Char const > Window_Title = "timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
     inline constexpr GLuint Window_W = 640u;
     inline constexpr GLuint Window_H = 360u;
     inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
@@ -44,19 +44,20 @@ namespace app {
     static constexpr signed Zero = 0;
     static constexpr unsigned Zero_U = 0u;
 
+    // NOTE: specific implementation for timelines
     struct Data;
 
     class Model final {
-        using DataPtr_ = Data *;
+        using DataPtr_ = Ptr< Data >;
         DataPtr_ data_;
       public:
         Model( );
        ~Model( );
-        [[nodiscard]] bool setup( );
-        void bind( );
-        void draw( );
-        void free( );
-        void clean( );
+        [[nodiscard]] Bool setup( );
+        Void bind( );
+        Void draw( );
+        Void free( );
+        Void clean( );
     };
 }
 
