@@ -3,6 +3,7 @@
 #include "vertices.hxx"
 // son8
 #include <son8/core/alias/data.hxx>
+#include <son8/core/alias/text.hxx>
 #include <son8/cxx/flow.hxx>
 #include <son8/cxx/func.hxx>
 #include <son8/main.hxx>
@@ -24,10 +25,13 @@
 #   warning "include proper overglad wrapper for specific opengl version"
 #   include <son8/overglad/comp.hxx>
 #endif // overglad include
+#include <print>
 /**
  * Vertices Wrap Timeline Examples
  */
 namespace app {
+
+    using namespace cxx::string_view_literals;
 
     namespace gl = overglad;
 
@@ -94,11 +98,9 @@ namespace app {
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
-        typedef GLuint Program;
-        typedef GLuint Attrib;
-        static constexpr Attrib Attrib_Pos = 0;
-        static constexpr Attrib Attrib_Color = 1;
-        Program idProgram;
+        static constexpr GLuint Attrib_Pos = 0;
+        static constexpr GLuint Attrib_Color = 1;
+        gl::types::Program program;
         gl::types::BufferArray bufferArray;
         gl::types::BufferElement bufferElement;
         // NOTE: cache counts as data would be passed to buffer object and cleared
@@ -274,7 +276,6 @@ bool app::Model::setup( Ref< RawData > raw ) try {
     vertices.clear( );
     indices.clear( );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
-    return true;
 
     return true;
 } catch ( ... ) { return false; }
@@ -309,16 +310,132 @@ void app::Model::clean( ) {
 }
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
 bool app::Model::setup( Ref< RawData > raw ) try {
+    // shaders
+    // -- code
+    View codeShared = R"GLSL(#version 120
+    varying vec4 vColor;
+)GLSL"sv;
+
+    View codeVertex = R"GLSL(
+    attribute vec2 aPos;
+    attribute vec4 aColor;
+
+void main( ) {
+    gl_Position = vec4( aPos, 0.0, 1.0 )
+    vColor = aColor;
+}
+    )GLSL"sv;
+
+    View codeFragment = R"GLSL(
+void main( ) {
+    gl_FragColor = vColor.rgba;
+}
+    )GLSL"sv;
+    // -- loading
+    data_->program = gl::program( );
+    gl::types::Program program = data_->program;
+    gl::types::Shader vertex = gl::shader( gl::enums::Shader::Vertex );
+    gl::types::Shader fragment = gl::shader( gl::enums::Shader::Fragment );
+    gl::attach( program, vertex );
+    gl::attach( program, fragment );
+    using Sources = Flat< View, 2 >;
+    Sources sourcesVertex = { codeShared, codeVertex };
+    Sources sourcesFragment = { codeShared, codeFragment };
+
+    auto shader_source = []( gl::types::Shader shader, Ref< Sources > sources ) {
+        GLchar const * ptrs[2] = { sources[0].data( ), sources[1].data( )};
+        GLint lens[2] = { APP_CAST( GLint, sources[0].size( )), APP_CAST( GLint, sources[1].size( ))};
+        gl::shader_source( shader, 2, ptrs, lens );
+    };
+
+    shader_source( vertex, sourcesVertex );
+    shader_source( fragment, sourcesFragment );
+
+    gl::compile( vertex );
+    gl::compile( fragment );
+
+    gl::bind_attrib_location( program, Data::Attrib_Pos, "aPos" );
+    gl::bind_attrib_location( program, Data::Attrib_Color, "aColor" );
+    gl::link( program );
+    GLint statusProgram = GL_FALSE;
+    gl::get_program( program, GL_LINK_STATUS, &statusProgram );
+    auto info = [&]{
+        APP_ASSERT( not statusProgram );
+        int v = 0; int f = 1; int p = 2;
+        GLint len[3] = { };
+        std::println( stderr, "info log:" );
+        gl::get_shader( vertex, GL_INFO_LOG_LENGTH, &len[v] );
+        gl::get_shader( fragment, GL_INFO_LOG_LENGTH, &len[f] );
+        gl::get_program( program, GL_INFO_LOG_LENGTH, &len[p] );
+        GLint totalLen =  len[v] + len[f] + len[p] + 1;
+        GLint writed1 = 0, writed2 = 0;
+        cxx::string infoLog;
+        infoLog.resize( totalLen );
+        infoLog[0] = '\0';
+        gl::get_shader_info_log( vertex, len[v], &writed1, infoLog.data( ));
+        gl::get_shader_info_log( fragment, len[f], &writed2, infoLog.data( ) + writed1 );
+        gl::get_program_info_log( program, len[p], nullptr, infoLog.data( ) + writed1 + writed2 );
+        std::println( stderr, "{}\n", infoLog );
+    };
+
+    if ( not statusProgram ) { info( ); return false; }
+
+    gl::detach( program, vertex );
+    gl::detach( program, fragment );
+    gl::free( vertex );
+    gl::free( fragment );
+    // Buffers
+    Size verticesCount = raw.vertices( ).size( );
+    // -- NOTE: cache for draw calls
+    data_->indicesCount = raw.indices( ).size( );
+    Grow< Vertex > vertices( verticesCount );
+    Grow< Index > indices( data_->indicesCount );
+    cxx::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), vertices.begin( ));
+    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), indices.begin( ));
+    gl::gen( data_->bufferArray );
+    gl::gen( data_->bufferElement );
+    gl::bind( data_->bufferArray );
+    gl::buffer_data( GL_ARRAY_BUFFER, vertices.size( ) * sizeof( Vertex ), vertices.data( ), GL_STATIC_DRAW );
+    gl::bind( data_->bufferElement );
+    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, indices.size( ) * sizeof( Index ), indices.data( ), GL_STATIC_DRAW );
+    vertices.clear( );
+    indices.clear( );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+
     return true;
 } catch ( ... ) { return false; }
 
-void app::Model::bind( ) { }
+void app::Model::bind( ) {
+    gl::bind( data_->bufferArray );
+    gl::bind( data_->bufferElement );
+    gl::enable_vertex_attrib_array( Data::Attrib_Pos );
+    gl::enable_vertex_attrib_array( Data::Attrib_Color );
+    gl::vertex_attrib_pointer( Data::Attrib_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
+    gl::vertex_attrib_pointer( Data::Attrib_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
+    gl::bind( data_->program );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
 
-void app::Model::draw( ) { }
+void app::Model::draw( ) {
+    gl::draw_elements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
 
-void app::Model::free( ) { }
+void app::Model::free( ) {
+    gl::unbind( gl::enums::Program::All );
+    gl::disable_vertex_attrib_array( Data::Attrib_Color );
+    gl::disable_vertex_attrib_array( Data::Attrib_Pos );
+    gl::bind_buffer( GL_ARRAY_BUFFER, Zero );
+    gl::bind_buffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
 
-void app::Model::clean( ) { }
+void app::Model::clean( ) {
+    gl::free( data_->program );
+    gl::del( data_->bufferArray );
+    gl::del( data_->bufferElement );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
 #else
 #warning "timeline model interface not implemented"
 bool app::Model::setup( Ref< RawData > raw ) try { return true; } catch ( ... ) { return false; }
