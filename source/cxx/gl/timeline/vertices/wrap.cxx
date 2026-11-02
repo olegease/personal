@@ -2,15 +2,12 @@
 #define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
 // son8
-#include <son8/main.hxx>
-#include <son8/windowed.hxx>
 #include <son8/core/alias/data.hxx>
 #include <son8/cxx/flow.hxx>
 #include <son8/cxx/func.hxx>
-/**
- * Vertices Wrap Timeline Examples
- */
-
+#include <son8/main.hxx>
+// `son8` wrappers
+#include <son8/windowed.hxx>
 #define SON8_OVERGLAD_INCLUDE_DEPRECATED
 #if 0u \
     || APP_TIMELINE == APP_TIMELINE_LIST \
@@ -22,15 +19,19 @@
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
     #include <son8/overglad/v1_5.hxx>
 #else
+    #warning "include proper overglad wrapper for specific opengl version"
     #include <son8/overglad/comp.hxx>
 #endif // overglad include
-
+/**
+ * Vertices Wrap Timeline Examples
+ */
 namespace app {
-    using namespace core;
+
     namespace gl = overglad;
 
     using Error = cxx::runtime_error;
     using Window = windowed::Window;
+    using WindowConfig = windowed::Config;
 
     struct App {
         Model model;
@@ -43,7 +44,12 @@ void son8::main( Args args ) {
     App appOut;
     Ref< App > app = appOut;
 
-    Window window{ SON8_OVERGLAD_VERSION };
+    WindowConfig windowCfg{ SON8_OVERGLAD_VERSION };
+    windowCfg.set( WindowConfig::Width{ Window_W });
+    windowCfg.set( WindowConfig::Height{ Window_H });
+    windowCfg.set( WindowConfig::Title{ Window_Title });
+
+    Window window{ windowCfg };
 
     if ( window.is_error( window.bind_opengl( ))) { throw Error{ "cannot bind opengl" }; }
 

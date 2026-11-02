@@ -1,5 +1,5 @@
 #define APP_TYPE_PURE
-#define APP_TIMELINE APP_TIMELINE_OBJECT
+#define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
 // `son8`
 #include <son8/main.hxx>
@@ -7,7 +7,7 @@
 #include <son8/c/char.hxx>
 #include <son8/c/byte.hxx>
 #include <son8/c/file.hxx>
-// `son8` wrappers
+// `son8` pure wrappers
 #include <glfw/son8.hxx>
 #include <glad/son8.hxx>
 /**
@@ -18,13 +18,6 @@
 // \ `wrap` version should use modern techniques instead
 
 namespace app {
-
-    using namespace son8::core;
-
-    inline constexpr char const *Window_Title = "Pure timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
-    inline constexpr GLuint Window_W = 640u;
-    inline constexpr GLuint Window_H = 360u;
-    inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
 
     enum Flag : unsigned {
         Flag_Goto_Printed_Bit = 1u << 0u,
@@ -54,7 +47,6 @@ namespace app {
 
 void son8::main( Args args ) {
     using namespace app;
-    bool isGotoPrinted, isGotoSuccess;
     // operations on same stack frame
     App appData;
     // passing to mutation functions
@@ -63,16 +55,20 @@ void son8::main( Args args ) {
     App const *app = appPtr;
     if ( not glfwInit( )) { goto failed_init; }
 
+    glfwDefaultWindowHints( );
+    glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
+
     appData.window = glfwCreateWindow( Window_W, Window_H, Window_Title, nullptr, nullptr );
 
     if ( not appData.window ) { goto failed_window; }
+    // NOTE: fix for tiled window managers
+    glfwSetWindowSize( app->window, Window_W, Window_H );
 
     glfwMakeContextCurrent( app->window );
 
     if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
 
     if ( not appData.model.setup( )) { goto failed_setup; }
-
 
     while ( not glfwWindowShouldClose( app->window )) try {
         glfwPollEvents( );
@@ -104,7 +100,7 @@ failed_window:
 failed_init:
     goto_print_error( appPtr, "failed to initialize glfw" );
 
-    if ( not goto_is_success( app )) Exit::failure( );
+    if ( not goto_is_success( app )) { Exit::failure( ); };
 }
 
 namespace app {

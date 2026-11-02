@@ -2,6 +2,7 @@
 #define APP_VERTICES_HXX
 
 #include <cassert>
+#include <glad/son8/header.h>
 
 // TODO: wrap the model into special class that would allow to
 // \ choose `OpenGL` version for vertices processing for future timelines
@@ -24,10 +25,19 @@
 #define APP_ASSERT( check ) assert(( check ))
 #define APP_CAST( to, from ) static_cast< to >(( from ))
 
-namespace son8 { }
+// forward declare namespaces
+namespace son8 { namespace core { }}
 
 namespace app {
+
     using namespace son8;
+    using namespace son8::core;
+
+    inline constexpr char const *Window_Title = "timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
+    inline constexpr GLuint Window_W = 640u;
+    inline constexpr GLuint Window_H = 360u;
+    inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
+
     static constexpr signed Zero = 0;
     static constexpr unsigned Zero_U = 0u;
 
