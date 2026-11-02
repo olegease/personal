@@ -118,71 +118,33 @@ namespace app {
     typedef Vertex_Position_Type Vertex_Position[Vertex_Position_Size];
     typedef Vertex_Color_Type Vertex_Color[Vertex_Color_Size];
 
-    static constexpr auto Data_Vertices_Count_ = 14;
-    static constexpr auto Data_Indices_Count_ = 36;
-    typedef Vertex Data_Vertices_[Data_Vertices_Count_];
-    typedef GLubyte Data_Index;
-    typedef Data_Index Data_Indices_[Data_Indices_Count_];
     typedef GLuint Data_List;
     typedef GLuint Data_Buffer;
 
     struct Data {
-        Data_Vertices_ vertices_ = {
-            { .xy = {0.0f,-.2f}, .rgba = { Zero,Zero,Zero,255u }}, // 0
-            { .xy = {0.0f,+.2f}, .rgba = { Zero,255u,Zero,255u }}, // 1
-            { .xy = {+.2f,+.2f}, .rgba = { 255u,255u,Zero,255u }}, // 2
-            { .xy = {+.2f,-.2f}, .rgba = { 255u,Zero,Zero,255u }}, // 3
-            { .xy = {-.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 4
-            { .xy = {-.2f,-.2f}, .rgba = { Zero,Zero,255u,255u }}, // 5
-            { .xy = {-.2f,+.2f}, .rgba = { Zero,255u,255u,255u }}, // 6
-            { .xy = {-.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 7
-            { .xy = {+.4f,-.2f}, .rgba = { 255u,Zero,255u,255u }}, // 8
-            { .xy = {+.4f,+.2f}, .rgba = { 255u,255u,255u,255u }}, // 9
-            { .xy = {+.2f,-.6f}, .rgba = { 255u,Zero,255u,255u }}, // 10
-            { .xy = {0.0f,-.6f}, .rgba = { Zero,Zero,255u,255u }}, // 11
-            { .xy = {0.0f,+.6f}, .rgba = { Zero,255u,255u,255u }}, // 12
-            { .xy = {+.2f,+.6f}, .rgba = { 255u,255u,255u,255u }}, // 13
-        };
-        Data_Indices_ indices_ = {
-            // back
-             0u, 3u, 2u,
-             0u, 2u, 1u,
-            // front
-             4u, 5u, 6u,
-             4u, 6u, 7u,
-            // left
-             5u, 0u, 1u,
-             5u, 1u, 6u,
-            // right
-             3u, 8u, 9u,
-             3u, 9u, 2u,
-            // bottom
-            11u,10u, 3u,
-            11u, 3u, 0u,
-            // top
-             1u, 2u,13u,
-             1u,13u,12u
-        };
-#if APP_TIMELINE == APP_TIMELINE_LIST
+#if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
+        Vertex *vertices;
+        Size verticesCount;
+#elif APP_TIMELINE == APP_TIMELINE_LIST
         Data_List list;
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
         Vertex_Position *positions;
         Vertex_Color *colors;
+        Size verticesCount;
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
         Vertex *vertices;
+        Size verticesCount;
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
         Vertex *vertices;
-        Data_Index *indices;
+        Index *indices;
+        Size indicesCount;
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
         static constexpr auto Index_VBO = 0;
         static constexpr auto Index_EBO = 1;
         static constexpr auto Buffer_Count = 2;
         Data_Buffer buffers[Buffer_Count];
-        Vertex *vertices;
-        Data_Index *indices;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
-        Size verticesCount = 0;
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
         typedef GLuint Program;
         typedef GLuint Attrib;
@@ -193,11 +155,8 @@ namespace app {
         static constexpr auto Index_EBO = 1;
         static constexpr auto Buffer_Count = 2;
         Data_Buffer buffers[Buffer_Count];
-        Vertex *vertices;
-        Data_Index *indices;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
-        Size verticesCount = 0;
 #elif APP_TIMELINE == APP_TIMELINE_OBJECT
         typedef GLuint Object;
         typedef GLuint Program;
@@ -210,22 +169,11 @@ namespace app {
         static constexpr auto Index_EBO = 1;
         static constexpr auto Buffer_Count = 2;
         Data_Buffer buffers[Buffer_Count];
-        Vertex *vertices;
-        Data_Index *indices;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
-        Size verticesCount = 0;
 #endif
     }; // struct Data
 
-    Vertex_Color_Type const *data_color_v( Data const *data, Size i ) {
-        Data_Index index = data->indices_[i];
-        return &data->vertices_[index].rgba[0];
-    }
-    Vertex_Position_Type const *data_vertex_v( Data const *data, Size i ) {
-        Data_Index index = data->indices_[i];
-        return &data->vertices_[index].xy[0];
-    }
 #if APP_TIMELINE >= APP_TIMELINE_BUFFER
     Data_Buffer data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
     Data_Buffer data_buffer_ebo( Data const *data ) { return data->buffers[Data::Index_EBO]; }
@@ -237,14 +185,28 @@ app::Model::Model( ) : data_{ new Data } { }
 app::Model::~Model( ) { delete data_; }
 // timelines
 #if APP_TIMELINE == APP_TIMELINE_IMMEDIATE
-bool app::Model::setup( RawData const & raw ) { return true; }
+bool app::Model::setup( RawData const &raw ) {
+    Size size = raw.indices_count( );
+    data_->verticesCount = size;
+    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * size );
+
+    if ( not data_->vertices ) return false;
+
+    for ( Size i = 0u; i < size; ++i ) {
+        c::memcpy( data_->vertices + i,
+                raw.indirect_vertex_v( i ),
+                sizeof(Vertex) );
+    }
+
+    return true;
+}
 void app::Model::bind( ) { }
 
 void app::Model::draw( ) {
     glBegin( GL_TRIANGLES );
-    for ( Size i = 0; i < Data_Indices_Count_; ++i ) {
-        glColor4ubv( data_color_v( data_, i ));
-        glVertex2fv( data_vertex_v( data_, i ));
+    for ( Size i = 0; i < data_->verticesCount; ++i ) {
+        glColor4ubv( data_->vertices[i].rgba.data( ));
+        glVertex2fv( data_->vertices[i].xy.data( ));
     }
     glEnd( );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
@@ -259,9 +221,9 @@ bool app::Model::setup( RawData const &raw ) {
     data_->list = glGenLists( 1 );
     glNewList( list, GL_COMPILE );
     glBegin( GL_TRIANGLES );
-    for ( Size i = 0; i < Data_Indices_Count_; ++i ) {
-        glColor4ubv( data_color_v( data_, i ));
-        glVertex2fv( data_vertex_v( data_, i ));
+    for ( Size i = 0; i < raw.indices_count(); ++i ) {
+        glColor4ubv( raw.indirect_color_v( i ));
+        glVertex2fv( raw.indirect_vertex_v( i ));
     }
     glEnd( );
     glEndList( );
@@ -284,15 +246,16 @@ void app::Model::clean( ) {
 }
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
 bool app::Model::setup( RawData const &raw ) {
-    Size size = Data_Indices_Count_;
+    Size size = raw.indices_count( );
+    data_->verticesCount = size;
     data_->positions = ( Vertex_Position *)c::malloc( sizeof(Vertex_Position) * size );
     data_->colors = ( Vertex_Color *)c::malloc( sizeof(Vertex_Color) * size );
 
     if ( not data_->positions or not data_->colors ) return false;
 
     for ( Size i = 0u; i < size; ++i ) {
-        c::memcpy( data_->positions + i, data_vertex_v( data_, i ), sizeof( Vertex_Position ));
-        c::memcpy( data_->colors + i, data_color_v( data_, i ), sizeof( Vertex_Color ));
+        c::memcpy( data_->positions + i, raw.indirect_vertex_v(i ), sizeof( Vertex_Position ));
+        c::memcpy( data_->colors + i, raw.indirect_color_v( i ), sizeof( Vertex_Color ));
     }
 
     return true;
@@ -307,7 +270,7 @@ void app::Model::bind( ) {
 }
 
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, Data_Indices_Count_);
+    glDrawArrays( GL_TRIANGLES, Zero, data_->verticesCount );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -323,13 +286,14 @@ void app::Model::clean( ) {
 }
 #elif APP_TIMELINE == APP_TIMELINE_INTERLEAVE
 bool app::Model::setup( RawData const &raw ) {
-    Size size = Data_Indices_Count_;
+    Size size = raw.indices_count( );
+    data_->verticesCount = size;
     data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * size );
 
     if ( not data_->vertices ) return false;
 
     for ( Size i = 0u; i < size; ++i ) {
-        c::memcpy( data_->vertices + i, &data_->vertices_[data_->indices_[i]], sizeof(Vertex) );
+        c::memcpy( data_->vertices + i, raw.indirect_vertex_v( i ), sizeof(Vertex) );
     }
 
     return true;
@@ -345,7 +309,7 @@ void app::Model::bind( ) {
 }
 
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, Data_Indices_Count_ );
+    glDrawArrays( GL_TRIANGLES, Zero, data_->verticesCount );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -360,13 +324,17 @@ void app::Model::clean( ) {
 }
 #elif APP_TIMELINE == APP_TIMELINE_ELEMENT
 bool app::Model::setup( RawData const &raw ) {
-    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
-    data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
+    Size verticesCount = raw.vertices_count( );
+    data_->indicesCount = raw.indices_count( );
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Size indicesBytes = sizeof( Vertex ) * data_->indicesCount;
+    data_->vertices = (Vertex *)c::malloc( verticesBytes );
+    data_->indices = (Index *)c::malloc( indicesBytes );
 
     if ( not data_->vertices or not data_->indices ) { return false; }
 
-    c::memcpy( data_->vertices, &data_->vertices_[0], sizeof( data_->vertices_ ));
-    c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
+    c::memcpy( data_->vertices, raw.vertices( ).data( ), verticesBytes );
+    c::memcpy( data_->indices, raw.indices( ).data( ), indicesBytes );
 
     return true;
 }
@@ -381,7 +349,7 @@ void app::Model::bind( ) {
 }
 
 void app::Model::draw( ) {
-    glDrawElements( GL_TRIANGLES, Data_Indices_Count_, GL_UNSIGNED_BYTE, data_->indices);
+    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, data_->indices);
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
@@ -397,22 +365,27 @@ void app::Model::clean( ) {
 }
 #elif APP_TIMELINE == APP_TIMELINE_BUFFER
 bool app::Model::setup( RawData const &raw ) {
-    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
-    data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
+    // NOTE: cache for draw calls
+    data_->indicesCount = raw.indices_count( );
 
-    if ( not data_->vertices or not data_->indices ) { return false; }
+    Size verticesCount = raw.vertices_count( );
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Size indicesBytes = sizeof( Vertex ) * data_->indicesCount;
+    Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
+    Index *indices = (Index *)c::malloc( indicesBytes );
 
-    c::memcpy( data_->vertices, &data_->vertices_[0], sizeof( data_->vertices_ ));
-    c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
-    data_->verticesCount = Data_Vertices_Count_;
-    data_->indicesCount = Data_Indices_Count_;
+    if ( not vertices or not indices ) { return false; }
+
+    c::memcpy( vertices, raw.vertices( ).data( ), verticesBytes );
+    c::memcpy( indices, raw.indices( ).data( ), indicesBytes );
+
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, data_->verticesCount * sizeof( Vertex ), data_->vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Data_Index ), data_->indices, GL_STATIC_DRAW );
-    c::free( data_->vertices );
-    c::free( data_->indices );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
+    c::free( vertices );
+    c::free( indices );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;
@@ -514,22 +487,29 @@ void main( ) {
     glDetachShader( idProgram, idFragment );
     glDeleteShader( idVertex );
     glDeleteShader( idFragment );
-    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
-    data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
 
-    if ( not data_->vertices or not data_->indices ) { return false; }
+    // Buffers
+    // NOTE: cache for draw calls
+    data_->indicesCount = raw.indices_count( );
 
-    c::memcpy( data_->vertices, &data_->vertices_[0], sizeof( data_->vertices_ ));
-    c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
-    data_->verticesCount = Data_Vertices_Count_;
-    data_->indicesCount = Data_Indices_Count_;
+    Size verticesCount = raw.vertices_count( );
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Size indicesBytes = sizeof( Vertex ) * data_->indicesCount;
+    Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
+    Index *indices = (Index *)c::malloc( indicesBytes );
+
+    if ( not vertices or not indices ) { return false; }
+
+    c::memcpy( vertices, raw.vertices( ).data( ), verticesBytes );
+    c::memcpy( indices, raw.indices( ).data( ), indicesBytes );
+
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, data_->verticesCount * sizeof( Vertex ), data_->vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Data_Index ), data_->indices, GL_STATIC_DRAW );
-    c::free( data_->vertices );
-    c::free( data_->indices );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
+    c::free( vertices );
+    c::free( indices );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;
@@ -566,7 +546,7 @@ void app::Model::clean( ) {
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_OBJECT
-bool app::Model::setup( ) {
+bool app::Model::setup( RawData const &raw ) {
     char const *codeShared = R"GLSL(#version 330 core
 )GLSL";
 
@@ -633,24 +613,28 @@ void main( ) {
     glDetachShader( idProgram, idFragment );
     glDeleteShader( idVertex );
     glDeleteShader( idFragment );
+    // Buffers
+    // NOTE: cache for draw calls
+    data_->indicesCount = raw.indices_count( );
 
-    data_->vertices = (Vertex *)c::malloc( sizeof(Vertex) * Data_Vertices_Count_ );
-    data_->indices = (Data_Index *)c::malloc( sizeof(Data_Index) * Data_Indices_Count_ );
+    Size verticesCount = raw.vertices_count( );
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Size indicesBytes = sizeof( Vertex ) * data_->indicesCount;
+    Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
+    Index *indices = (Index *)c::malloc( indicesBytes );
 
-    if ( not data_->vertices or not data_->indices ) { return false; }
+    if ( not vertices or not indices ) { return false; }
 
-    c::memcpy( data_->vertices, &data_->vertices_[0], sizeof( data_->vertices_ ));
-    c::memcpy( data_->indices, &data_->indices_[0], sizeof( data_->indices_ ));
+    c::memcpy( vertices, raw.vertices( ).data( ), verticesBytes );
+    c::memcpy( indices, raw.indices( ).data( ), indicesBytes );
 
-    data_->verticesCount = Data_Vertices_Count_;
-    data_->indicesCount = Data_Indices_Count_;
     glGenVertexArrays( 1, &data_->object );
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindVertexArray( data_->object );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, data_->verticesCount * sizeof( Vertex ), data_->vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Data_Index ), data_->indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
 
     glEnableVertexAttribArray( Data::Location_Pos );
     glEnableVertexAttribArray( Data::Location_Color );
@@ -658,8 +642,8 @@ void main( ) {
     glVertexAttribPointer( Data::Location_Color, Vertex_Color_Size, Vertex_Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
 
     glBindVertexArray( Zero );
-    c::free( data_->vertices );
-    c::free( data_->indices );
+    c::free( vertices );
+    c::free( indices );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;

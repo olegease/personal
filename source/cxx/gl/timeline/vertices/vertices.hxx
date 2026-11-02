@@ -23,7 +23,7 @@
 //`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
 
 // TODO remove later
-#define APP_TIMELINE APP_TIMELINE_SHADER
+#define APP_TIMELINE APP_TIMELINE_ELEMENT
 
 #define APP_STRINGIFY( x ) #x
 #define APP_STRINGIFY_EXPAND( x ) APP_STRINGIFY( x )
@@ -38,8 +38,8 @@ namespace app {
     using namespace son8::core;
 
     inline constexpr Ptr< Char const > Window_Title = "timeline version: " APP_STRINGIFY_EXPAND( APP_TIMELINE );
-    inline constexpr GLuint Window_W = 640u;
-    inline constexpr GLuint Window_H = 360u;
+    inline constexpr GLuint Window_W = 1280u;
+    inline constexpr GLuint Window_H = 720u;
     inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
 
     static constexpr signed Zero = 0;
@@ -111,14 +111,22 @@ namespace app {
              1u,13u,12u
         };
     public:
-        auto vertices_count( ) { return Vertices_Count_; }
-        auto indices_count( ) { return Indices_Count_; }
+        auto vertices_count( ) const { return Vertices_Count_; }
+        auto indices_count( ) const { return Indices_Count_; }
         auto vertices( ) const -> Ref< Vertices_ > { return vertices_; }
         auto indices( ) const -> Ref< Indices_ > { return indices_; }
         auto xy( Index index ) const -> Ref< Vertex::Position > { return vertices_[index].xy; }
         auto xy_v( Index index ) const -> Ptr< Vertex::Position_Type const > { return xy( index ).data( ); }
         auto rgb( Index index ) const -> Ref< Vertex::Color > { return vertices_[index].rgba; }
         auto rgb_v( Index index ) const -> Ptr< Vertex::Color_Type const > { return rgb( index ).data( ); }
+        auto indirect_vertex_v( Size i ) const -> Ptr< Vertex::Position_Type const > {
+            auto index = indices_[i];
+            return xy_v( index );
+        }
+        auto indirect_color_v( Size i ) const -> Ptr< Vertex::Color_Type const > {
+            auto index = indices_[i];
+            return rgb_v( index );
+        }
     };
 
     // NOTE: specific implementation for timelines
