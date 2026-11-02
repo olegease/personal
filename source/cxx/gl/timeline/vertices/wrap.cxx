@@ -321,7 +321,7 @@ bool app::Model::setup( Ref< RawData > raw ) try {
     attribute vec4 aColor;
 
 void main( ) {
-    gl_Position = vec4( aPos, 0.0, 1.0 )
+    gl_Position = vec4( aPos, 0.0, 1.0 );
     vColor = aColor;
 }
     )GLSL"sv;
@@ -361,21 +361,16 @@ void main( ) {
     gl::get_program( program, GL_LINK_STATUS, &statusProgram );
     auto info = [&]{
         APP_ASSERT( not statusProgram );
-        int v = 0; int f = 1; int p = 2;
-        GLint len[3] = { };
-        std::println( stderr, "info log:" );
-        gl::get_shader( vertex, GL_INFO_LOG_LENGTH, &len[v] );
-        gl::get_shader( fragment, GL_INFO_LOG_LENGTH, &len[f] );
-        gl::get_program( program, GL_INFO_LOG_LENGTH, &len[p] );
-        GLint totalLen =  len[v] + len[f] + len[p] + 1;
-        GLint writed1 = 0, writed2 = 0;
-        cxx::string infoLog;
-        infoLog.resize( totalLen );
-        infoLog[0] = '\0';
-        gl::get_shader_info_log( vertex, len[v], &writed1, infoLog.data( ));
-        gl::get_shader_info_log( fragment, len[f], &writed2, infoLog.data( ) + writed1 );
-        gl::get_program_info_log( program, len[p], nullptr, infoLog.data( ) + writed1 + writed2 );
-        std::println( stderr, "{}\n", infoLog );
+        GLint writen = 0;
+        gl::types::Info infoLog;
+        infoLog.append( "=== vertex ===\n");
+        gl::get_shader_info_log( vertex, infoLog.unused( ), &writen, infoLog.writer( ));
+        infoLog.append( "=== fragment ===\n", writen );
+        gl::get_shader_info_log( fragment, infoLog.unused( ), &writen, infoLog.writer( ));
+        infoLog.append( "=== program ===\n", writen );
+        gl::get_program_info_log( program, infoLog.unused( ), &writen, infoLog.writer( ));
+        infoLog.commit( writen );
+        std::println( stderr, "size: {},\ninfo log: {}", infoLog.size( ), infoLog.c_str( ));
     };
 
     if ( not statusProgram ) { info( ); return false; }
