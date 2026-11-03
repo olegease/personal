@@ -332,10 +332,11 @@ void main( ) {
 }
     )GLSL"sv;
     // -- loading
-    data_->program = gl::program( );
+    gl::gen( data_->program );
     gl::types::Program program = data_->program;
-    gl::types::Shader vertex = gl::shader( gl::enums::Shader::Vertex );
-    gl::types::Shader fragment = gl::shader( gl::enums::Shader::Fragment );
+    gl::types::Shader vertex, fragment;
+    gl::gen( vertex, gl::enums::Shader::Vertex );
+    gl::gen( fragment, gl::enums::Shader::Fragment );
     gl::attach( program, vertex );
     gl::attach( program, fragment );
     using Sources = Flat< View, 2 >;
@@ -343,7 +344,7 @@ void main( ) {
     Sources sourcesFragment = { codeShared, codeFragment };
 
     auto shader_source = []( gl::types::Shader shader, Ref< Sources > sources ) {
-        GLchar const * ptrs[2] = { sources[0].data( ), sources[1].data( )};
+        Ptr< GLchar const > ptrs[2] = { sources[0].data( ), sources[1].data( )};
         GLint lens[2] = { APP_CAST( GLint, sources[0].size( )), APP_CAST( GLint, sources[1].size( ))};
         gl::shader_source( shader, 2, ptrs, lens );
     };
@@ -372,8 +373,8 @@ void main( ) {
 
     gl::detach( program, vertex );
     gl::detach( program, fragment );
-    gl::free( vertex );
-    gl::free( fragment );
+    gl::del( vertex );
+    gl::del( fragment );
     // Buffers
     Size verticesCount = raw.vertices( ).size( );
     // -- NOTE: cache for draw calls
@@ -396,13 +397,13 @@ void main( ) {
 } catch ( ... ) { return false; }
 
 void app::Model::bind( ) {
+    gl::bind( data_->program );
     gl::bind( data_->bufferArray );
     gl::bind( data_->bufferElement );
     gl::enable_vertex_attrib_array( Data::Attrib_Pos );
     gl::enable_vertex_attrib_array( Data::Attrib_Color );
     gl::vertex_attrib_pointer( Data::Attrib_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
     gl::vertex_attrib_pointer( Data::Attrib_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
-    gl::bind( data_->program );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 
@@ -412,16 +413,16 @@ void app::Model::draw( ) {
 }
 
 void app::Model::free( ) {
-    gl::unbind( gl::enums::Program::All );
     gl::disable_vertex_attrib_array( Data::Attrib_Color );
     gl::disable_vertex_attrib_array( Data::Attrib_Pos );
-    gl::bind_buffer( GL_ARRAY_BUFFER, Zero );
-    gl::bind_buffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
+    gl::free( gl::types::BufferArray{ });
+    gl::free( gl::types::BufferElement{ });
+    gl::free( gl::types::Program{ });
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 
 void app::Model::clean( ) {
-    gl::free( data_->program );
+    gl::del( data_->program );
     gl::del( data_->bufferArray );
     gl::del( data_->bufferElement );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );

@@ -2,13 +2,15 @@
 
 BUILD := build
 SON8PATH := $(HOME)/code/ghub/soneight
+FORKPATH := $(HOME)/code/ghub/forkease
 
 usage:
 	@echo "make [command]"
 	@echo TODO
 
 setup:
-	@ln -s $(SON8PATH) son8
+	@ln -sf $(SON8PATH) son8
+	@ln -sf $(FORKPATH) fork
 	@mkdir -p $(BUILD)
 
 cmake:
@@ -23,5 +25,4 @@ run:
 	@./$(BUILD)/vertices-wrap
 
 clean:
-	@rm -f son8
 	@rm -fr build
