@@ -361,16 +361,11 @@ void main( ) {
     gl::get_program( program, GL_LINK_STATUS, &statusProgram );
     auto info = [&]{
         APP_ASSERT( not statusProgram );
-        GLint writen = 0;
-        gl::types::Info infoLog;
-        infoLog.append( "=== vertex ===\n");
-        gl::get_shader_info_log( vertex, infoLog.unused( ), &writen, infoLog.writer( ));
-        infoLog.append( "=== fragment ===\n", writen );
-        gl::get_shader_info_log( fragment, infoLog.unused( ), &writen, infoLog.writer( ));
-        infoLog.append( "=== program ===\n", writen );
-        gl::get_program_info_log( program, infoLog.unused( ), &writen, infoLog.writer( ));
-        infoLog.commit( writen );
-        std::println( stderr, "size: {},\ninfo log: {}", infoLog.size( ), infoLog.c_str( ));
+        gl::types::Info log;
+        gl::info( log, vertex, "=== vertex ===\n" );
+        gl::info( log, fragment, "=== fragment ===\n" );
+        gl::info( log, program, "=== program ===\n" );
+        std::println( stderr, "size/capacity: {}/{},\ninfo log: \n{}", log.size( ), log.capacity( ), log.view( ));
     };
 
     if ( not statusProgram ) { info( ); return false; }
