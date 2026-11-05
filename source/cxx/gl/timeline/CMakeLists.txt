@@ -10,7 +10,8 @@ add_subdirectory( son8/c_header )
 add_subdirectory( son8/cxx_unit )
 add_subdirectory( son8/core_lib )
 # NOTE: overglad are added before windowed to avoid fetching
-add_subdirectory( fork/son8-overglad )
+#add_subdirectory( fork/son8-overglad )
+add_subdirectory( son8/overglad )
 add_subdirectory( son8/windowed )
 # pure basic skeleton
 add_executable( pure pure.cxx )

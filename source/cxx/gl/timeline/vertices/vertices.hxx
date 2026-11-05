@@ -2,8 +2,8 @@
 #define APP_VERTICES_HXX
 
 #include <son8/core/alias/pour.hxx>
-#include <glad/son8/header.h>
-#include <glad/son8/define/values.h>
+#include <glad/son8/gl/header.h>
+#include <glad/son8/gl/define/values.h>
 
 #include <cassert>
 
@@ -23,7 +23,7 @@
 //`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
 
 // TODO remove later
-#define APP_TIMELINE APP_TIMELINE_SHADER
+#define APP_TIMELINE APP_TIMELINE_OBJECT
 
 #define APP_STRINGIFY( x ) #x
 #define APP_STRINGIFY_EXPAND( x ) APP_STRINGIFY( x )

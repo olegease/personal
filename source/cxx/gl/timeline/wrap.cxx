@@ -24,6 +24,6 @@ void son8::main( Args args ) {
     window.free_opengl( );
     window.run( []{
             gl::clear_color( .125f, .125f, .125f );
-            gl::clear( gl::enums::Clearbit::Color );
+            gl::clear( gl::field::Clear::Color );
     });
 }

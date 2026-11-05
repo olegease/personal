@@ -158,16 +158,13 @@ namespace app {
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
 #elif APP_TIMELINE == APP_TIMELINE_OBJECT
-        typedef GLuint Object;
-        typedef GLuint Program;
-        typedef GLuint Attrib;
-        Object object;
-        Program idProgram;
-        static constexpr Attrib Location_Pos = 0;
-        static constexpr Attrib Location_Color = 1;
+        static constexpr GLuint Location_Pos = 0;
+        static constexpr GLuint Location_Color = 1;
         static constexpr auto Index_VBO = 0;
         static constexpr auto Index_EBO = 1;
         static constexpr auto Buffer_Count = 2;
+        GLuint idProgram;
+        GLuint object;
         Data_Buffer buffers[Buffer_Count];
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
@@ -560,7 +557,7 @@ void main( ) {
     gl_Position = vec4( aPos, 0.0, 1.0 );
     vColor = aColor;
 }
-    )GLSL";
+)GLSL";
 
     char const *codeFragment = R"GLSL(
     in vec4 vColor;
@@ -568,9 +565,9 @@ void main( ) {
 void main( ) {
     FragColor = vColor;
 }
-    )GLSL";
+)GLSL";
     data_->idProgram = glCreateProgram( );
-    Data::Program idProgram = data_->idProgram;
+    GLuint idProgram = data_->idProgram;
     GLuint idVertex = glCreateShader( GL_VERTEX_SHADER );
     GLuint idFragment = glCreateShader( GL_FRAGMENT_SHADER );
     APP_ASSERT( idProgram and idVertex and idFragment );
@@ -667,9 +664,9 @@ void app::Model::free( ) {
 }
 
 void app::Model::clean( ) {
-    glDeleteVertexArrays( 1, &data_->object );
-    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
     glDeleteProgram( data_->idProgram );
+    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
+    glDeleteVertexArrays( 1, &data_->object );
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
 }

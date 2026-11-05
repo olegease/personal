@@ -19,8 +19,8 @@
 #   include <son8/overglad/v1_1.hxx>
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
 #   include <son8/overglad/v2_1.hxx>
-#elif APP_TIMELINE == APP_TIMELINE_BUFFER
-#   include <son8/overglad/v1_5.hxx>
+#elif APP_TIMELINE == APP_TIMELINE_OBJECT
+#   include <son8/overglad/v3_3.hxx>
 #else
 #   warning "include proper overglad wrapper for specific opengl version"
 #   include <son8/overglad/comp.hxx>
@@ -66,7 +66,7 @@ void son8::main( Args args ) {
     window.free_opengl( );
     window.run( [&appOut]{
             gl::clear_color( .125f, .125f, .125f );
-            gl::clear( gl::enums::Clearbit::Color );
+            gl::clear( gl::field::Clear::Color );
             appOut.model.bind( );
             appOut.model.draw( );
             appOut.model.free( );
@@ -100,6 +100,15 @@ namespace app {
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
         static constexpr GLuint Attrib_Pos = 0;
         static constexpr GLuint Attrib_Color = 1;
+        gl::types::Program program;
+        gl::types::BufferArray bufferArray;
+        gl::types::BufferElement bufferElement;
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_OBJECT
+        static constexpr GLuint Location_Pos = 0;
+        static constexpr GLuint Location_Color = 1;
+        gl::types::VertexArray vertexArray;
         gl::types::Program program;
         gl::types::BufferArray bufferArray;
         gl::types::BufferElement bufferElement;
@@ -326,9 +335,10 @@ void main( ) {
 }
     )GLSL"sv;
 
-    View codeFragment = R"GLSL(
+    View codeFragment = R"GLSL(#version 120
+    varying vec4 vColor;
 void main( ) {
-    gl_FragColor = vColor.rgba;
+    gl_FragColor = vColor;
 }
     )GLSL"sv;
     // -- loading
@@ -339,18 +349,11 @@ void main( ) {
     gl::gen( fragment, gl::enums::Shader::Fragment );
     gl::attach( program, vertex );
     gl::attach( program, fragment );
-    using Sources = Flat< View, 2 >;
-    Sources sourcesVertex = { codeShared, codeVertex };
-    Sources sourcesFragment = { codeShared, codeFragment };
+    gl::types::Sources< 2 > sourcesVertex{ codeShared, codeVertex };
+    gl::types::Source sourcesFragment{ codeFragment };
 
-    auto shader_source = []( gl::types::Shader shader, Ref< Sources > sources ) {
-        Ptr< GLchar const > ptrs[2] = { sources[0].data( ), sources[1].data( )};
-        GLint lens[2] = { APP_CAST( GLint, sources[0].size( )), APP_CAST( GLint, sources[1].size( ))};
-        gl::shader_source( shader, 2, ptrs, lens );
-    };
-
-    shader_source( vertex, sourcesVertex );
-    shader_source( fragment, sourcesFragment );
+    gl::sources( vertex, sourcesVertex );
+    gl::source( fragment, sourcesFragment );
 
     gl::compile( vertex );
     gl::compile( fragment );
@@ -363,9 +366,9 @@ void main( ) {
     auto info = [&]{
         APP_ASSERT( not statusProgram );
         gl::types::Info log;
-        gl::info( log, vertex, "=== vertex ===\n" );
-        gl::info( log, fragment, "=== fragment ===\n" );
         gl::info( log, program, "=== program ===\n" );
+        gl::info( log, fragment, "=== fragment ===\n" );
+        gl::info( log, vertex, "=== vertex ===\n" );
         std::println( stderr, "size/capacity: {}/{},\ninfo log: \n{}", log.size( ), log.capacity( ), log.view( ));
     };
 
@@ -425,6 +428,120 @@ void app::Model::clean( ) {
     gl::del( data_->program );
     gl::del( data_->bufferArray );
     gl::del( data_->bufferElement );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
+#elif APP_TIMELINE == APP_TIMELINE_OBJECT
+bool app::Model::setup( Ref< RawData > raw ) try {
+    // shaders
+    // -- code
+    View codeShared = R"GLSL(#version 330 core
+)GLSL"sv;
+
+    View codeVertex = R"GLSL(
+    layout( location = 0 ) in vec2 aPos;
+    layout( location = 1 ) in vec4 aColor;
+
+    out vec4 vColor;
+
+void main( ) {
+    gl_Position = vec4( aPos, 0.0, 1.0 );
+    vColor = aColor;
+}
+)GLSL"sv;
+
+    View codeFragment = R"GLSL(
+    in vec4 vColor;
+    out vec4 FragColor;
+void main( ) {
+    FragColor = vColor;
+}
+)GLSL"sv;
+    // -- loading
+    gl::gen( data_->program );
+    gl::types::Program program = data_->program;
+    gl::types::Shader vertex, fragment;
+    gl::gen( vertex, gl::enums::Shader::Vertex );
+    gl::gen( fragment, gl::enums::Shader::Fragment );
+    APP_ASSERT( program and vertex and fragment );
+    gl::attach( program, vertex );
+    gl::attach( program, fragment );
+    gl::types::Sources< 2 > sourcesVertex{ codeShared, codeVertex };
+    gl::types::Sources< 2 > sourcesFragment{ codeShared, codeFragment };
+
+    gl::sources( vertex, sourcesVertex );
+    gl::sources( fragment, sourcesFragment );
+
+    gl::compile( vertex );
+    gl::compile( fragment );
+
+    gl::link( program );
+    GLint statusProgram = GL_FALSE;
+    gl::get_program( program, GL_LINK_STATUS, &statusProgram );
+    auto info = [&]{
+        APP_ASSERT( not statusProgram );
+        gl::types::Info log;
+        gl::info( log, program, "=== program ===\n" );
+        gl::info( log, fragment, "=== fragment ===\n" );
+        gl::info( log, vertex, "=== vertex ===\n" );
+        std::println( stderr, "size/capacity: {}/{},\ninfo log: \n{}", log.size( ), log.capacity( ), log.view( ));
+    };
+
+    if ( not statusProgram ) { info( ); return false; }
+
+    gl::detach( program, vertex );
+    gl::detach( program, fragment );
+    gl::del( vertex );
+    gl::del( fragment );
+    // Buffers
+    // -- NOTE: cache for draw calls
+    data_->indicesCount = raw.indices( ).size( );
+    Size verticesCount = raw.vertices( ).size( );
+    Grow< Vertex > vertices( verticesCount );
+    Grow< Index > indices( data_->indicesCount );
+    cxx::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), vertices.begin( ));
+    cxx::copy( raw.indices( ).begin( ), raw.indices( ).end( ), indices.begin( ));
+    gl::gen( data_->vertexArray );
+    gl::gen( data_->bufferArray );
+    gl::gen( data_->bufferElement );
+    gl::bind( data_->vertexArray );
+    gl::bind( data_->bufferArray );
+    gl::buffer_data( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices.data( ), GL_STATIC_DRAW );
+    gl::bind( data_->bufferElement );
+    gl::buffer_data( GL_ELEMENT_ARRAY_BUFFER, indices.size( ) * sizeof( Index ), indices.data( ), GL_STATIC_DRAW );
+    gl::enable_vertex_attrib_array( Data::Location_Pos );
+    gl::enable_vertex_attrib_array( Data::Location_Color );
+    gl::vertex_attrib_pointer( Data::Location_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, sizeof( Vertex ), (void *)offsetof( Vertex, xy ));
+    gl::vertex_attrib_pointer( Data::Location_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, sizeof( Vertex ), (void *)offsetof( Vertex, rgba ));
+    gl::free( gl::types::VertexArray{ });
+    vertices.clear( );
+    indices.clear( );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+
+    return true;
+} catch ( ... ) { return false; }
+
+void app::Model::bind( ) {
+    gl::bind( data_->program );
+    gl::bind( data_->vertexArray );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
+
+void app::Model::draw( ) {
+    gl::draw_elements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
+
+void app::Model::free( ) {
+    gl::free( gl::types::Program{ });
+    gl::free( gl::types::VertexArray{ });
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
+}
+
+void app::Model::clean( ) {
+    gl::del( data_->program );
+    gl::del( data_->bufferElement );
+    gl::del( data_->bufferArray );
+    gl::del( data_->vertexArray );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
 #else
