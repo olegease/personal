@@ -16,6 +16,7 @@
 // TODO: rewrite it using mostly `c` style coding, like raw loops, no exceptions leaked
 // \ `wrap` version should use modern techniques instead
 
+
 namespace app {
 
     enum Flag : unsigned {
@@ -29,6 +30,10 @@ namespace app {
         RawData data;
         GLFWwindow *window{ };
         unsigned flags{ };
+        GLint viewport[4];
+        char const *vendor{ };
+        char const *renderer{ };
+        char const *version{ };
     };
 
     void goto_success( App *appOut ) {
@@ -58,6 +63,10 @@ void son8::main( Args args ) {
 
     glfwDefaultWindowHints( );
     glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
+#if APP_TIMELINE >= APP_TIMELINE_BINARY
+    // gl debug window hints
+    glfwWindowHint( GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE ); // <--- CRITICAL
+#endif
 
     appData.window = glfwCreateWindow( Window_W, Window_H, title.c_str( ), nullptr, nullptr );
 
@@ -68,6 +77,16 @@ void son8::main( Args args ) {
     glfwMakeContextCurrent( app->window );
 
     if ( not gladLoadGL( reinterpret_cast< GLADloadfunc >( glfwGetProcAddress ))) { goto failed_glad; }
+
+    glGetIntegerv( GL_VIEWPORT, appPtr->viewport );
+    c::printf( "viewport: %d %d %d %d\n", app->viewport[0], app->viewport[1], app->viewport[2], app->viewport[3] );
+    appPtr->vendor = (char const *)glGetString( GL_VENDOR );
+    c::printf( "vendor: %s\n", appPtr->vendor );
+    appPtr->renderer = (char const *)glGetString( GL_RENDERER );
+    c::printf( "renderer: %s\n", appPtr->renderer );
+    appPtr->version = (char const *)glGetString( GL_VERSION );
+    c::printf( "version: %s\n", appPtr->version );
+    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     if ( not appData.model.setup( app->data )) { goto failed_setup; }
 
@@ -168,6 +187,11 @@ namespace app {
         Data_Buffer buffers[Buffer_Count];
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_DEBUG
+        static constexpr auto Index_VBO = 0;
+        static constexpr auto Index_EBO = 1;
+        static constexpr auto Buffer_Count = 2;
+        Data_Buffer buffers[Buffer_Count];
 #endif
     }; // struct Data
 
@@ -670,9 +694,42 @@ void app::Model::clean( ) {
     APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
 }
+#elif APP_TIMELINE == APP_TIMELINE_DEBUG
+bool app::Model::setup( RawData const &raw ) {
+    GLint flagsContext;
+    glGetIntegerv( GL_CONTEXT_FLAGS, &flagsContext );
+    if ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT ) {
+        auto debug_callback = [](
+            GLenum source,
+            GLenum type,
+            GLuint id,
+            GLenum severity,
+            GLsizei length,
+            GLchar const *message,
+            void const *userParam
+        ) GLAPIENTRY {
+            c::fprintf( stderr, "GL DEBUG [%u]: %s\n", id, message );
+        };
+        glEnable( GL_DEBUG_OUTPUT );
+        glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
+        glDebugMessageCallback( debug_callback, nullptr );
+        glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE );
+    } else {
+        c::fprintf( stderr, "app: debug context flag is not set\n" );
+    }
+    return glGetError( ) == GL_NO_ERROR;
+}
+
+void app::Model::bind( ) { }
+
+void app::Model::draw( ) { }
+
+void app::Model::free( ) { }
+
+void app::Model::clean( ) { }
 #else
 // TODO: shaders vertex array object, named buffers and so on
-bool app::Model::setup( ) { return true; }
+bool app::Model::setup( RawData const &raw ) { return true; }
 
 void app::Model::bind( ) { }
 

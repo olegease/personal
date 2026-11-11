@@ -21,6 +21,8 @@
 #   include <son8/overglad/v2_1.hxx>
 #elif APP_TIMELINE == APP_TIMELINE_OBJECT
 #   include <son8/overglad/v3_3.hxx>
+#elif APP_TIMELINE == APP_TIMELINE_DEBUG
+#   include <son8/overglad/v4_3.hxx>
 #else
 #   warning "include proper overglad wrapper for specific opengl version"
 #   include <son8/overglad/comp.hxx>
@@ -43,6 +45,7 @@ namespace app {
         Model model;
         RawData data;
     };
+
 }
 
 void son8::main( Args args ) {
@@ -60,6 +63,18 @@ void son8::main( Args args ) {
     Window window{ windowCfg };
 
     if ( window.is_error( window.bind_opengl( ))) { throw Error{ "cannot bind opengl" }; }
+
+    auto viewport = gl::get( gl::state::Viewport{ });
+    std::println( "viewport: {} {} {} {}", viewport[0], viewport[1], viewport[2], viewport[3] );
+    // strings
+    auto print_gl_string = []( View title, auto get ) {
+        gl::get( get );
+        std::println( "{}: {}", title, get.value( ));
+    };
+    print_gl_string( "vendor"sv, gl::state::Vendor{ });
+    print_gl_string( "renderer"sv, gl::state::Renderer{ });
+    print_gl_string( "version"sv, gl::state::Version{ });
+    APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 
     if ( not appOut.model.setup( app.data )) { throw Error{ "setup model failed" }; }
 
@@ -335,8 +350,7 @@ void main( ) {
 }
     )GLSL"sv;
 
-    View codeFragment = R"GLSL(#version 120
-    varying vec4 vColor;
+    View codeFragment = R"GLSL(
 void main( ) {
     gl_FragColor = vColor;
 }
@@ -349,11 +363,10 @@ void main( ) {
     gl::gen( fragment, gl::enums::Shader::Fragment );
     gl::attach( program, vertex );
     gl::attach( program, fragment );
-    gl::types::Sources< 2 > sourcesVertex{ codeShared, codeVertex };
-    gl::types::Source sourcesFragment{ codeFragment };
+    std::array< View, 2 > sourcesVertex{ codeShared, codeVertex };
 
     gl::sources( vertex, sourcesVertex );
-    gl::source( fragment, sourcesFragment );
+    gl::sources( fragment, { codeShared, codeFragment } );
 
     gl::compile( vertex );
     gl::compile( fragment );
@@ -465,10 +478,9 @@ void main( ) {
     APP_ASSERT( program and vertex and fragment );
     gl::attach( program, vertex );
     gl::attach( program, fragment );
-    gl::types::Sources< 2 > sourcesVertex{ codeShared, codeVertex };
-    gl::types::Sources< 2 > sourcesFragment{ codeShared, codeFragment };
+    std::vector< View > sourcesFragment{ codeShared, codeFragment };
 
-    gl::sources( vertex, sourcesVertex );
+    gl::sources( vertex, { codeShared, codeVertex } );
     gl::sources( fragment, sourcesFragment );
 
     gl::compile( vertex );
