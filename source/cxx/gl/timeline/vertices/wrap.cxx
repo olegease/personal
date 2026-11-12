@@ -556,6 +556,30 @@ void app::Model::clean( ) {
     gl::del( data_->vertexArray );
     APP_ASSERT( gl::get( ) == gl::enums::Error::No );
 }
+#elif APP_TIMELINE == APP_TIMELINE_DEBUG
+bool app::Model::setup( Ref< RawData > raw ) try {
+    auto debug_callback = [](
+        GLenum source,
+        GLenum type,
+        GLuint id,
+        GLenum severity,
+        GLsizei length,
+        GLchar const *message,
+        void const *userParam
+    ) GLAPIENTRY {
+        std::println( "GL DEBUG [{}]: {}", id, message );
+    };
+
+    return true;
+} catch ( ... ) { return false; }
+
+void app::Model::bind( ) { }
+
+void app::Model::draw( ) { }
+
+void app::Model::free( ) { }
+
+void app::Model::clean( ) { }
 #else
 #warning "timeline model interface not implemented"
 bool app::Model::setup( Ref< RawData > raw ) try { return true; } catch ( ... ) { return false; }

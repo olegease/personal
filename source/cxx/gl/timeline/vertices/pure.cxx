@@ -188,16 +188,23 @@ namespace app {
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
 #elif APP_TIMELINE == APP_TIMELINE_DEBUG
+        static constexpr GLuint Location_Pos = 0;
+        static constexpr GLuint Location_Color = 1;
         static constexpr auto Index_VBO = 0;
         static constexpr auto Index_EBO = 1;
+        static constexpr GLuint Binding_Point_Vertex = 0;
         static constexpr auto Buffer_Count = 2;
-        Data_Buffer buffers[Buffer_Count];
+        GLuint idProgram;
+        GLuint object;
+        GLuint buffers[Buffer_Count];
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
 #endif
     }; // struct Data
 
 #if APP_TIMELINE >= APP_TIMELINE_BUFFER
-    Data_Buffer data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
-    Data_Buffer data_buffer_ebo( Data const *data ) { return data->buffers[Data::Index_EBO]; }
+    GLuint data_buffer_vbo( Data const *data ) { return data->buffers[Data::Index_VBO]; }
+    GLuint data_buffer_ebo( Data const *data ) { return data->buffers[Data::Index_EBO]; }
 #endif
 
 }
@@ -640,7 +647,7 @@ void main( ) {
 
     Size verticesCount = raw.vertices_count( );
     Size verticesBytes = sizeof( Vertex ) * verticesCount;
-    Size indicesBytes = sizeof( Vertex ) * data_->indicesCount;
+    Size indicesBytes = sizeof( Index ) * data_->indicesCount;
     Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
     Index *indices = (Index *)c::malloc( indicesBytes );
 
@@ -653,9 +660,9 @@ void main( ) {
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindVertexArray( data_->object );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, verticesBytes, vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, indicesBytes, indices, GL_STATIC_DRAW );
 
     glEnableVertexAttribArray( Data::Location_Pos );
     glEnableVertexAttribArray( Data::Location_Color );
@@ -695,38 +702,136 @@ void app::Model::clean( ) {
 
 }
 #elif APP_TIMELINE == APP_TIMELINE_DEBUG
+void debug_gl_callback( GLenum, GLenum, GLuint id, GLenum severity, GLsizei, GLchar const *message, void const * ) GLAPIENTRY {
+    son8::c::fprintf( stderr, "GL DEBUG [%u]: %s\n", id, message );
+    if ( severity == GL_DEBUG_SEVERITY_HIGH ) { APP_ASSERT( false and "high severity error" ); }
+}
 bool app::Model::setup( RawData const &raw ) {
+    // debug
     GLint flagsContext;
     glGetIntegerv( GL_CONTEXT_FLAGS, &flagsContext );
     if ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT ) {
-        auto debug_callback = [](
-            GLenum source,
-            GLenum type,
-            GLuint id,
-            GLenum severity,
-            GLsizei length,
-            GLchar const *message,
-            void const *userParam
-        ) GLAPIENTRY {
-            c::fprintf( stderr, "GL DEBUG [%u]: %s\n", id, message );
-        };
         glEnable( GL_DEBUG_OUTPUT );
         glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
-        glDebugMessageCallback( debug_callback, nullptr );
+        glDebugMessageCallback( debug_gl_callback, nullptr );
         glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE );
     } else {
         c::fprintf( stderr, "app: debug context flag is not set\n" );
     }
-    return glGetError( ) == GL_NO_ERROR;
+    // shader
+    char const *codeShared = "#version 430 core\n";
+    char const *codeVertex =
+        "layout ( location = 0 ) in vec2 aPos\n"
+        "layout ( location = 1 ) in vec4 aColor;\n"
+        "layout ( location = 0 ) out vec4 vColor;\n"
+        "void main( ) {\n"
+        "   gl_Position = vec4( aPos, 0.0, 1.0 );\n"
+        "   vColor = aColor;\n"
+        "}\n"
+    ;
+    char const *codeFragment =
+        "layout ( location = 0 ) in vec4 vColor;\n"
+        "out vec4 FragColor;\n"
+        "void main( ) {\n"
+        "   FragColor = vColor;\n"
+        "}\n"
+    ;
+    data_->idProgram = glCreateProgram( );
+    GLuint idProgram = data_->idProgram;
+    GLuint idVertex = glCreateShader( GL_VERTEX_SHADER );
+    GLuint idFragment = glCreateShader( GL_FRAGMENT_SHADER );
+    APP_ASSERT( idProgram and idVertex and idFragment );
+    glAttachShader( idProgram, idVertex );
+    glAttachShader( idProgram, idFragment );
+    char const *sourcesVertex[] = { codeShared, codeVertex };
+    char const *sourcesFragment[] = { codeShared, codeFragment };
+    glShaderSource( idVertex, 2, sourcesVertex, nullptr );
+    glShaderSource( idFragment, 2, sourcesFragment, nullptr );
+    glCompileShader( idVertex );
+    glCompileShader( idFragment );
+    glLinkProgram( idProgram );
+    GLint statusProgram = GL_FALSE;
+    glGetProgramiv( idProgram, GL_LINK_STATUS, &statusProgram );
+    auto info = [&]{
+        APP_ASSERT( statusProgram == GL_FALSE );
+        // NOTE: checking only program log error, as debug should catch shader errors automatically
+        c::fprintf( stderr, "shader program info log:\n" );
+        GLint len = { };
+        glGetProgramiv( idProgram, GL_INFO_LOG_LENGTH, &len );
+        char *infoLog = (char *)c::malloc( len );
+        infoLog[0] = '\0';
+        glGetProgramInfoLog( idProgram, len, nullptr, infoLog );
+        c::fprintf( stderr, "%s\n", infoLog );
+        c::free( infoLog );
+    };
+
+    if ( not statusProgram ) { info( ); return false; }
+    // clean, unused after program linked
+    glDetachShader( idProgram, idFragment );
+    glDetachShader( idProgram, idVertex );
+    glDeleteShader( idFragment );
+    glDeleteShader( idVertex );
+    // Buffers
+    // -- cache for draw call
+    data_->indicesCount = raw.indices_count( );
+    Size verticesCount = raw.vertices_count( );
+    Size indicesBytes = sizeof( Index ) * data_->indicesCount;
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Index *indices = (Index *)c::malloc( indicesBytes );
+    Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
+
+    if ( not indices or not vertices ) { return false; }
+
+    c::memcpy( indices, raw.indices( ).data( ), indicesBytes );
+    c::memcpy( vertices, raw.vertices( ).data( ), verticesBytes );
+    // -- upload data to `gpu`
+    glGenBuffers( Data::Buffer_Count, data_->buffers );
+    glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
+    glBufferData( GL_ARRAY_BUFFER, verticesBytes, vertices, GL_STATIC_DRAW );
+    glBindBuffer( GL_ARRAY_BUFFER, Unbind );
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, indicesBytes, indices, GL_STATIC_DRAW );
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Unbind );
+    // -- configure vertex array object
+    glGenVertexArrays( 1, &data_->object );
+    glBindVertexArray( data_->object );
+    glVertexAttribFormat( Data::Location_Pos, Vertex_Position_Size, Vertex_Position_Type_GL, GL_FALSE, offsetof( Vertex, xy ));
+    glVertexAttribFormat( Data::Location_Color, Vertex_Color_Size, Vertex_Color_Type_GL, GL_TRUE, offsetof( Vertex, rgba ));
+    glVertexAttribBinding( Data::Location_Pos, Data::Binding_Point_Vertex );
+    glVertexAttribBinding( Data::Location_Color, Data::Binding_Point_Vertex );
+    glEnableVertexAttribArray( Data::Location_Pos );
+    glEnableVertexAttribArray( Data::Location_Color );
+    // -- bind buffers to vertex array object
+    glBindVertexBuffer( Data::Binding_Point_Vertex, data_buffer_vbo( data_ ), Zero, sizeof( Vertex ));
+    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
+
+    c::free( vertices );
+    c::free( indices );
+
+    glBindVertexArray( Unbind );
+
+    return true;
 }
 
-void app::Model::bind( ) { }
+void app::Model::bind( ) {
+    glUseProgram( data_->idProgram );
+    glBindVertexArray( data_->object );
+}
 
-void app::Model::draw( ) { }
+void app::Model::draw( ) {
+    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+}
 
-void app::Model::free( ) { }
+void app::Model::free( ) {
+    glBindVertexArray( Unbind );
+    glUseProgram( Unbind );
+}
 
-void app::Model::clean( ) { }
+void app::Model::clean( ) {
+    glDeleteProgram( data_->idProgram );
+    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
+    glDeleteVertexArrays( 1, &data_->object );
+}
 #else
 // TODO: shaders vertex array object, named buffers and so on
 bool app::Model::setup( RawData const &raw ) { return true; }

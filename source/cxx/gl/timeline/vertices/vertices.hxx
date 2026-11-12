@@ -42,6 +42,7 @@ namespace app {
     inline constexpr GLdouble Window_Aspect = 1.0 * Window_W / ( 1.0 * Window_H );
 
     static constexpr signed Zero = 0;
+    static constexpr signed Unbind = 0;
     static constexpr unsigned Zero_U = 0u;
 
     using Index = GLubyte;
