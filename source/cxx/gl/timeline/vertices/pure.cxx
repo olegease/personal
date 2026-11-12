@@ -721,7 +721,7 @@ bool app::Model::setup( RawData const &raw ) {
     // shader
     char const *codeShared = "#version 430 core\n";
     char const *codeVertex =
-        "layout ( location = 0 ) in vec2 aPos\n"
+        "layout ( location = 0 ) in vec2 aPos;\n"
         "layout ( location = 1 ) in vec4 aColor;\n"
         "layout ( location = 0 ) out vec4 vColor;\n"
         "void main( ) {\n"
