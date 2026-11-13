@@ -63,7 +63,7 @@ void son8::main( Args args ) {
 
     glfwDefaultWindowHints( );
     glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
-#if APP_TIMELINE >= APP_TIMELINE_BINARY
+#if APP_TIMELINE >= APP_TIMELINE_DEBUG
     // gl debug window hints
     glfwWindowHint( GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE ); // <--- CRITICAL
 #endif
@@ -197,6 +197,18 @@ namespace app {
         GLuint idProgram;
         GLuint object;
         GLuint buffers[Buffer_Count];
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_NAME
+        static constexpr GLuint Location_Pos = 0;
+        static constexpr GLuint Location_Color = 1;
+        static constexpr GLuint Binding_Point_Vertex = 0;
+        static constexpr auto Index_VBO = 0;
+        static constexpr auto Index_EBO = 1;
+        static constexpr auto Buffer_Count = 2;
+        GLuint buffers[Buffer_Count];
+        GLuint idProgram;
+        GLuint object;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
 #endif
@@ -750,22 +762,6 @@ bool app::Model::setup( RawData const &raw ) {
     glCompileShader( idVertex );
     glCompileShader( idFragment );
     glLinkProgram( idProgram );
-    GLint statusProgram = GL_FALSE;
-    glGetProgramiv( idProgram, GL_LINK_STATUS, &statusProgram );
-    auto info = [&]{
-        APP_ASSERT( statusProgram == GL_FALSE );
-        // NOTE: checking only program log error, as debug should catch shader errors automatically
-        c::fprintf( stderr, "shader program info log:\n" );
-        GLint len = { };
-        glGetProgramiv( idProgram, GL_INFO_LOG_LENGTH, &len );
-        char *infoLog = (char *)c::malloc( len );
-        infoLog[0] = '\0';
-        glGetProgramInfoLog( idProgram, len, nullptr, infoLog );
-        c::fprintf( stderr, "%s\n", infoLog );
-        c::free( infoLog );
-    };
-
-    if ( not statusProgram ) { info( ); return false; }
     // clean, unused after program linked
     glDetachShader( idProgram, idFragment );
     glDetachShader( idProgram, idVertex );
@@ -832,8 +828,143 @@ void app::Model::clean( ) {
     glDeleteBuffers( Data::Buffer_Count, data_->buffers );
     glDeleteVertexArrays( 1, &data_->object );
 }
+#elif APP_TIMELINE == APP_TIMELINE_NAME
+bool debug_gl_process( bool drain = false ) {
+    GLint remaining = 0;
+    glGetIntegerv( GL_DEBUG_LOGGED_MESSAGES, &remaining );
+    if ( not remaining ) { return false; }
+    else if ( drain ) {
+        glGetDebugMessageLog( remaining, 0, NULL, NULL, NULL, NULL, NULL, NULL );
+        return false;
+    }
+    static constexpr GLint Num = 8;
+    GLuint ids[Num];
+    GLenum sevs[Num];
+    GLsizei lens[Num];
+    GLint maxMsgLen;
+    glGetIntegerv( GL_MAX_DEBUG_MESSAGE_LENGTH, &maxMsgLen );
+    GLuint bufSize = maxMsgLen * Num;
+    GLchar *msgData = (GLchar *)malloc( bufSize );
+
+    GLuint count = remaining >= Num ? Num : remaining;
+    GLuint read = glGetDebugMessageLog( count, bufSize, NULL, NULL, ids, sevs, lens, msgData );
+    bool crush = false;
+    GLchar const *curr = msgData;
+    for ( GLuint i = 0; i < read; ++i ) {
+        if ( sevs[i] == GL_DEBUG_SEVERITY_HIGH ) { crush = true; }
+        son8::c::fprintf( stderr, "GL DEBUG [%u] %.*s\n", ids[i], lens[i], curr );
+        curr += lens[i];
+    }
+    free( msgData );
+
+    if ( crush ) { APP_ASSERT( false and "high severity error encountered" ); }
+
+    return read > 0u;
+}
+bool app::Model::setup( RawData const &raw ) {
+    GLint flagsContext;
+    glGetIntegerv( GL_CONTEXT_FLAGS, &flagsContext );
+    if ( not ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT )) {
+        c::fprintf( stderr, "app: debug context flag is not set" );
+        return false;
+    }
+    glEnable( GL_DEBUG_OUTPUT );
+    glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_FALSE );
+    // flush leftover debug messages
+    debug_gl_process( true );
+    glDebugMessageControl( GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, nullptr, GL_TRUE );
+    // Shaders
+    char const *codeShared = "#version 460 core\n";
+    char const *codeVertex =
+        "layout ( location = 0 ) in vec2 aPos;\n"
+        "layout ( location = 1 ) in vec4 aColor;\n"
+        "layout ( location = 0 ) out vec4 vColor;\n"
+        "void main( ) {\n"
+        "   gl_Position = vec4( aPos, 0.0, 1.0 );\n"
+        "   vColor = aColor;\n"
+        "}\n"
+    ;
+    char const *codeFragment =
+        "layout ( location = 0 ) in vec4 vColor;\n"
+        "out vec4 FragColor;\n"
+        "void main( ) {\n"
+        "   FragColor = vColor;\n"
+        "}\n"
+    ;
+    data_->idProgram = glCreateProgram( );
+    GLuint idProgram = data_->idProgram;
+    GLuint idVertex = glCreateShader( GL_VERTEX_SHADER );
+    GLuint idFragment = glCreateShader( GL_FRAGMENT_SHADER );
+    APP_ASSERT( idProgram and idVertex and idFragment );
+    glAttachShader( idProgram, idVertex );
+    glAttachShader( idProgram, idFragment );
+    char const *sourcesVertex[] = { codeShared, codeVertex };
+    char const *sourcesFragment[] = { codeShared, codeFragment };
+    glShaderSource( idVertex, 2, sourcesVertex, nullptr );
+    glShaderSource( idFragment, 2, sourcesFragment, nullptr );
+    glCompileShader( idVertex );
+    glCompileShader( idFragment );
+    glLinkProgram( idProgram );
+    // -- clean, unused after program linked
+    glDetachShader( idProgram, idFragment );
+    glDetachShader( idProgram, idVertex );
+    glDeleteShader( idFragment );
+    glDeleteShader( idVertex );
+    // Buffers
+    // -- prepare data
+    data_->indicesCount = raw.indices_count( );
+    Size verticesCount = raw.vertices_count( );
+    Size indicesBytes = sizeof( Index ) * data_->indicesCount;
+    Size verticesBytes = sizeof( Vertex ) * verticesCount;
+    Index *indices = (Index *)c::malloc( indicesBytes );
+    Vertex *vertices = (Vertex *)c::malloc( verticesBytes );
+
+    if ( not indices or not vertices ) { return false; }
+
+    c::memcpy( indices, raw.indices( ).data( ), indicesBytes );
+    c::memcpy( vertices, raw.vertices( ).data( ), verticesBytes );
+    // -- upload data to `gpu`
+    glCreateVertexArrays( 1, &data_->object );
+    glCreateBuffers( Data::Buffer_Count, data_->buffers );
+    glNamedBufferStorage( data_buffer_vbo( data_ ), verticesBytes, vertices, Zero );
+    glNamedBufferStorage( data_buffer_ebo( data_ ), indicesBytes, indices, Zero );
+    glEnableVertexArrayAttrib( data_->object, Data::Location_Pos );
+    glEnableVertexArrayAttrib( data_->object, Data::Location_Color );
+    glVertexArrayAttribFormat( data_->object, Data::Location_Pos, Vertex_Position_Size, Vertex_Position_Type_GL, GL_FALSE, offsetof( Vertex, xy ));
+    glVertexArrayAttribFormat( data_->object, Data::Location_Color, Vertex_Color_Size, Vertex_Color_Type_GL, GL_TRUE, offsetof( Vertex, rgba ));
+    glVertexArrayAttribBinding( data_->object, Data::Location_Pos, Data::Binding_Point_Vertex );
+    glVertexArrayAttribBinding( data_->object, Data::Location_Color, Data::Binding_Point_Vertex );
+    glVertexArrayVertexBuffer( data_->object, Data::Binding_Point_Vertex, data_buffer_vbo( data_ ), Zero, sizeof( Vertex ));
+    glVertexArrayElementBuffer( data_->object, data_buffer_ebo( data_ ));
+
+    c::free( vertices );
+    c::free( indices );
+
+    return true;
+}
+
+void app::Model::bind( ) {
+    glUseProgram( data_->idProgram );
+    glBindVertexArray( data_->object );
+}
+
+void app::Model::draw( ) {
+    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+}
+
+void app::Model::free( ) {
+    glBindVertexArray( Unbind );
+    glUseProgram( Unbind );
+    while ( debug_gl_process( ));
+}
+
+void app::Model::clean( ) {
+    glDeleteProgram( data_->idProgram );
+    glDeleteBuffers( Data::Buffer_Count, data_->buffers );
+    glDeleteVertexArrays( 1, &data_->object );
+}
 #else
-// TODO: shaders vertex array object, named buffers and so on
+#warning "timeline model interface not implemented"
 bool app::Model::setup( RawData const &raw ) { return true; }
 
 void app::Model::bind( ) { }

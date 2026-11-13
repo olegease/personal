@@ -19,11 +19,10 @@
 #define APP_TIMELINE_SHADER     0x0201'0u // Vertex and Fragment Shaders, `glsl 120`
 #define APP_TIMELINE_OBJECT     0x0303'0u // Vertex Array Object `glsl 330`
 #define APP_TIMELINE_DEBUG      0x0403'0u // Debug, Binary Shaders and Program Pipelines `glsl 430`
-// TODO
-//`#define APP_TIMELINE_NAME 0x0406'0u` // Named Objects Specification `glsl 460`
+#define APP_TIMELINE_NAME       0x0406'0u // Named Objects Specification `glsl 460`
 
 // TODO remove later
-#define APP_TIMELINE APP_TIMELINE_DEBUG
+#define APP_TIMELINE APP_TIMELINE_NAME
 
 #define APP_STRINGIFY( x ) #x
 #define APP_STRINGIFY_EXPAND( x ) APP_STRINGIFY( x )

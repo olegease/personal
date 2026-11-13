@@ -23,11 +23,14 @@
 #   include <son8/overglad/v3_3.hxx>
 #elif APP_TIMELINE == APP_TIMELINE_DEBUG
 #   include <son8/overglad/v4_3.hxx>
+#elif APP_TIMELINE == APP_TIMELINE_NAME
+#   include <son8/overglad.hxx>
 #else
 #   warning "include proper overglad wrapper for specific opengl version"
 #   include <son8/overglad/comp.hxx>
 #endif // overglad include
 #include <print>
+#include <ranges>
 /**
  * Vertices Wrap Timeline Examples
  */
@@ -137,6 +140,16 @@ namespace app {
         gl::types::Program program;
         gl::types::BufferArray bufferArray;
         gl::types::BufferElement bufferElement;
+        // NOTE: cache counts as data would be passed to buffer object and cleared
+        Size indicesCount = 0;
+#elif APP_TIMELINE == APP_TIMELINE_NAME
+        static constexpr GLuint Location_Pos = 0u;
+        static constexpr GLuint Location_Color = 1u;
+        static constexpr GLuint Binding_Point_Vertex = 0u;
+        gl::types::Program program;
+        gl::types::NamedVertexArray namedVertexArray;
+        gl::types::NamedBufferArray namedBufferArray;
+        gl::types::NamedBufferElement namedBufferElement;
         // NOTE: cache counts as data would be passed to buffer object and cleared
         Size indicesCount = 0;
 #else
@@ -684,6 +697,139 @@ void app::Model::clean( ) {
     gl::del( data_->bufferElement );
     gl::del( data_->vertexArray );
 }
+#elif APP_TIMELINE == APP_TIMELINE_NAME
+template< bool Is_Drain = false >
+bool debug_gl_process( ) {
+    using namespace app;
+    GLint remainingSigned{ };
+    gl::get_integer( GL_DEBUG_LOGGED_MESSAGES, &remainingSigned );
+    auto remaining = APP_CAST( GLuint, remainingSigned );
+    if ( not remaining ) { return false; }
+
+    if constexpr ( Is_Drain ) {
+        gl::get_debug_message_log( remaining, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr );
+        return false;
+    }
+    static constexpr GLuint Num = 8;
+    GLint maxMsgLenSigned;
+    gl::get_integer( GL_MAX_DEBUG_MESSAGE_LENGTH, &maxMsgLenSigned );
+    auto maxMsgLen = APP_CAST( GLuint, maxMsgLenSigned );
+    GLuint bufSize = maxMsgLen * Num;
+    Grow< GLchar > msg;
+    msg.resize( bufSize );
+    Flat< GLuint, Num > ids;
+    Flat< GLenum, Num > sevs;
+    Flat< GLsizei, Num > lens;
+
+    GLuint count = remaining >= Num ? Num : remaining;
+    GLuint read = gl::get_debug_message_log( count, bufSize, NULL, NULL, ids.data( ), sevs.data( ), lens.data( ), msg.data( ));
+    if ( not read ) { return false; }
+    bool isShouldCrush = false;
+    namespace v = std::views;
+    auto const *curr = msg.data( );
+    for ( auto i : v::iota( 0u ) | v::take( read )) {
+        if ( sevs[i] == GL_DEBUG_SEVERITY_HIGH ) { isShouldCrush = true; }
+        View view{ curr, APP_CAST( Size, lens[i] ) };
+        std::println( stderr, "GL DEBUG: [{}] {}", ids[i], view );
+        curr += lens[i];
+    }
+    if ( isShouldCrush ) { APP_ASSERT( false and "high severity error encountered" ); }
+    return read > 0u;
+}
+bool app::Model::setup( Ref< RawData > raw ) try {
+    // Debug
+    GLint flagsContext;
+    gl::get_integer( GL_CONTEXT_FLAGS, &flagsContext );
+    if ( not ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT )) {
+        std::println( stderr, "app: debug context flag is not set" );
+        return false;
+    }
+    gl::enable( GL_DEBUG_OUTPUT );
+    glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_FALSE );
+    debug_gl_process< true >( );
+    glDebugMessageControl( GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, nullptr, GL_TRUE );
+    // Shaders
+    View codeShared = R"GLSL(#version 460 core
+    )GLSL"sv;
+    View codeVertex = R"GLSL(
+layout ( location = 0 ) in vec2 aPos;
+layout ( location = 1 ) in vec4 aColor;
+layout ( location = 0 ) out vec4 vColor;
+void main( ) {
+    gl_Position = vec4( aPos, 0.0, 1.0 );
+    vColor = aColor;
+}
+    )GLSL"sv;
+    View codeFragment = R"GLSL(
+layout ( location = 0 ) in vec4 vColor;
+out vec4 FragColor;
+void main( ) {
+    FragColor = vColor;
+}
+    )GLSL"sv;
+    gl::gen( data_->program );
+    gl::types::Shader vertex, fragment;
+    gl::gen( vertex, gl::enums::Shader::Vertex );
+    gl::gen( fragment, gl::enums::Shader::Fragment );
+    gl::attach( data_->program, vertex );
+    gl::attach( data_->program, fragment );
+    gl::sources( vertex, { codeShared, codeVertex });
+    gl::sources( fragment, { codeShared, codeFragment });
+    gl::compile( vertex );
+    gl::compile( fragment );
+    gl::link( data_->program );
+    // -- no longer need after link
+    gl::detach( data_->program, fragment );
+    gl::detach( data_->program, vertex );
+    gl::del( fragment );
+    gl::del( vertex );
+    // Buffers
+    data_->indicesCount = raw.indices_count( );
+    auto verticesCount = raw.vertices_count( );
+    Grow< Index > indices( data_->indicesCount );
+    Grow< Vertex > vertices( verticesCount );
+    std::copy( raw.indices( ).begin( ), raw.indices( ).end( ), indices.begin( ));
+    std::copy( raw.vertices( ).begin( ), raw.vertices( ).end( ), vertices.begin( ));
+    // -- upload to `GPU`
+    gl::gen( data_->namedVertexArray );
+    gl::gen( data_->namedBufferArray );
+    gl::gen( data_->namedBufferElement );
+    gl::named_buffer_storage( data_->namedBufferArray, sizeof( Vertex ) * verticesCount, vertices.data( ), Zero );
+    gl::named_buffer_storage( data_->namedBufferElement, sizeof( Index ) * data_->indicesCount, indices.data( ), Zero );
+    gl::enable_vertex_array_attrib( data_->namedVertexArray, Data::Location_Pos );
+    gl::enable_vertex_array_attrib( data_->namedVertexArray, Data::Location_Color );
+    gl::vertex_array_attrib_format( data_->namedVertexArray, Data::Location_Pos, Vertex::Position_Size, Vertex::Position_Type_GL, GL_FALSE, offsetof( Vertex, xy ));
+    gl::vertex_array_attrib_format( data_->namedVertexArray, Data::Location_Color, Vertex::Color_Size, Vertex::Color_Type_GL, GL_TRUE, offsetof( Vertex, rgba ));
+    gl::vertex_array_attrib_binding( data_->namedVertexArray, Data::Location_Pos, Data::Binding_Point_Vertex );
+    gl::vertex_array_attrib_binding( data_->namedVertexArray, Data::Location_Color, Data::Binding_Point_Vertex );
+    gl::vertex_array_vertex_buffer( data_->namedVertexArray, Data::Binding_Point_Vertex, data_->namedBufferArray, Zero, sizeof( Vertex ));
+    gl::vertex_array_element_buffer( data_->namedVertexArray, data_->namedBufferElement );
+
+    return true;
+} catch ( ... ) { return false; }
+
+void app::Model::bind( ) {
+    gl::bind( data_->program );
+    gl::bind( data_->namedVertexArray );
+}
+
+void app::Model::draw( ) {
+    gl::draw_elements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+}
+
+void app::Model::free( ) {
+    gl::free( gl::types::NamedVertexArray{ });
+    gl::free( gl::types::Program{ });
+    debug_gl_process( );
+}
+
+void app::Model::clean( ) {
+    gl::del( data_->program );
+    gl::del( data_->namedBufferArray );
+    gl::del( data_->namedBufferElement );
+    gl::del( data_->namedVertexArray );
+}
+
 #else
 #warning "timeline model interface not implemented"
 bool app::Model::setup( Ref< RawData > raw ) try { return true; } catch ( ... ) { return false; }
