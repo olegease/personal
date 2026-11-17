@@ -1,6 +1,6 @@
 #define APP_TYPE_PURE
-//#define APP_TIMELINE APP_TIMELINE_BUFFER
 #include "vertices.hxx"
+#include <app/debug.hxx>
 // `son8`
 #include <son8/main.hxx>
 #include <son8/c/byte.hxx>
@@ -34,6 +34,7 @@ namespace app {
         char const *vendor{ };
         char const *renderer{ };
         char const *version{ };
+        Debug debug;
     };
 
     void goto_success( App *appOut ) {
@@ -50,11 +51,12 @@ namespace app {
 
 }
 
-void son8::main( Args args ) {
+void son8::main( [[maybe_unused]] Args args ) {
     using namespace app;
     std::string title = std::string{ "Pure " } + Window_Title;
     // operations on same stack frame
     App appData;
+    Debug debug;
     // passing to mutation functions
     App *appPtr = &appData;
     // passing to constant functions
@@ -62,11 +64,11 @@ void son8::main( Args args ) {
     if ( not glfwInit( )) { goto failed_init; }
 
     glfwDefaultWindowHints( );
+#ifndef NDEBUG
+    // debug window hints
+    glfwWindowHint( GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE );
+#endif // debug builds
     glfwWindowHint( GLFW_RESIZABLE, GLFW_FALSE );
-#if APP_TIMELINE >= APP_TIMELINE_DEBUG
-    // gl debug window hints
-    glfwWindowHint( GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE ); // <--- CRITICAL
-#endif
 
     appData.window = glfwCreateWindow( Window_W, Window_H, title.c_str( ), nullptr, nullptr );
 
@@ -86,9 +88,19 @@ void son8::main( Args args ) {
     c::printf( "renderer: %s\n", appPtr->renderer );
     appPtr->version = (char const *)glGetString( GL_VERSION );
     c::printf( "version: %s\n", appPtr->version );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
-
+    debug.init( appPtr->version );
+    debug.drain( );
+    APP_ASSERT( debug.check( ));
     if ( not appData.model.setup( app->data )) { goto failed_setup; }
+
+    glDebugMessageInsert(
+        GL_DEBUG_SOURCE_APPLICATION,
+        GL_DEBUG_TYPE_OTHER,
+        0,
+        GL_DEBUG_SEVERITY_LOW,
+        -1,
+        "Test low-severity debug message"
+    );
 
     while ( not glfwWindowShouldClose( app->window )) try {
         glfwPollEvents( );
@@ -97,6 +109,7 @@ void son8::main( Args args ) {
         appData.model.bind( );
         appData.model.draw( );
         appData.model.free( );
+        APP_ASSERT( debug.check( ));
         glfwSwapBuffers( app->window );
     } catch ( ... ) { goto failed_while; }
 
@@ -132,7 +145,6 @@ namespace app {
     static constexpr GLenum Vertex_Color_Type_GL = GL_UNSIGNED_BYTE;
     static constexpr auto Vertex_Position_Size = 2;
     static constexpr auto Vertex_Color_Size = 4;
-    static constexpr auto Vertex_Pad_Size = 4;
 
     typedef Vertex_Position_Type Vertex_Position[Vertex_Position_Size];
     typedef Vertex_Color_Type Vertex_Color[Vertex_Color_Size];
@@ -249,7 +261,6 @@ void app::Model::draw( ) {
         glVertex2fv( data_->vertices[i].xy.data( ));
     }
     glEnd( );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::free( ) { }
@@ -267,7 +278,6 @@ bool app::Model::setup( RawData const &raw ) {
     }
     glEnd( );
     glEndList( );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
     return true;
 }
 
@@ -275,14 +285,12 @@ void app::Model::bind( ) { }
 
 void app::Model::draw( ) {
     glCallList( data_->list );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::free( ) { }
 
 void app::Model::clean( ) {
     glDeleteLists( data_->list, 1 );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_ARRAY
 bool app::Model::setup( RawData const &raw ) {
@@ -306,18 +314,15 @@ void app::Model::bind( ) {
     glEnableClientState( GL_COLOR_ARRAY );
     glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, Zero, data_->positions );
     glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, Zero, data_->colors );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, data_->verticesCount );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawArrays( GL_TRIANGLES, Zero, APP_CAST( GLsizei, data_->verticesCount ));
 }
 
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
@@ -345,18 +350,15 @@ void app::Model::bind( ) {
     static constexpr auto stride = sizeof( Vertex );
     glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, stride, &data_->vertices[Zero].xy );
     glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, stride, &data_->vertices[Zero].rgba );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawArrays( GL_TRIANGLES, Zero, data_->verticesCount );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawArrays( GL_TRIANGLES, Zero, APP_CAST( GLsizei, data_->verticesCount ));
 }
 
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
@@ -385,18 +387,15 @@ void app::Model::bind( ) {
     static constexpr auto stride = sizeof( Vertex );
     glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, stride, &data_->vertices[0].xy );
     glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, stride, &data_->vertices[0].rgba );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, data_->indices);
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawElements( GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount ), GL_UNSIGNED_BYTE, data_->indices);
 }
 
 void app::Model::free( ) {
     glDisableClientState( GL_VERTEX_ARRAY );
     glDisableClientState( GL_COLOR_ARRAY );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
@@ -421,12 +420,11 @@ bool app::Model::setup( RawData const &raw ) {
 
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, APP_CAST( GLsizeiptr, verticesCount * sizeof( Vertex )), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, APP_CAST( GLsizeiptr, data_->indicesCount * sizeof( Index )), indices, GL_STATIC_DRAW );
     c::free( vertices );
     c::free( indices );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;
 }
@@ -438,12 +436,10 @@ void app::Model::bind( ) {
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
     glVertexPointer( Vertex_Position_Size, Vertex_Position_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
     glColorPointer( Vertex_Color_Size, Vertex_Color_Type_GL, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawElements(GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero);
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawElements(GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount), GL_UNSIGNED_BYTE, (void *)Zero);
 }
 
 void app::Model::free( ) {
@@ -451,12 +447,10 @@ void app::Model::free( ) {
     glDisableClientState( GL_COLOR_ARRAY );
     glBindBuffer( GL_ARRAY_BUFFER, Zero );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
     glDeleteBuffers( Data::Buffer_Count, data_->buffers );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_SHADER
 bool app::Model::setup( RawData const &raw ) {
@@ -510,7 +504,7 @@ void main( ) {
         glGetShaderiv( idVertex, GL_INFO_LOG_LENGTH, &len[v] );
         glGetShaderiv( idFragment, GL_INFO_LOG_LENGTH, &len[f] );
         glGetProgramiv( idProgram, GL_INFO_LOG_LENGTH, &len[p] );
-        GLint totalLen =  len[v] + len[f] + len[p] + 1;
+        auto totalLen =  APP_CAST( Size, len[v] + len[f] + len[p] + 1 );
         GLint writed1 = 0, writed2 = 0;
         char *infoLog = (char *)c::malloc( totalLen );
         infoLog[0] = '\0';
@@ -545,12 +539,11 @@ void main( ) {
 
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, verticesCount * sizeof( Vertex ), vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, APP_CAST( GLsizeiptr, verticesCount * sizeof( Vertex )), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, data_->indicesCount * sizeof( Index ), indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, APP_CAST( GLsizeiptr, data_->indicesCount * sizeof( Index )), indices, GL_STATIC_DRAW );
     c::free( vertices );
     c::free( indices );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;
 }
@@ -563,12 +556,10 @@ void app::Model::bind( ) {
     glVertexAttribPointer( Data::Attrib_Pos, Vertex_Position_Size, Vertex_Position_Type_GL, GL_FALSE, sizeof( Vertex), (void *)offsetof( Vertex, xy ));
     glVertexAttribPointer( Data::Attrib_Color, Vertex_Color_Size, Vertex_Color_Type_GL, GL_TRUE, sizeof( Vertex), (void *)offsetof( Vertex, rgba ));
     glUseProgram( data_->idProgram );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawElements(GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero);
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawElements(GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount), GL_UNSIGNED_BYTE, (void *)Zero);
 }
 
 void app::Model::free( ) {
@@ -577,13 +568,11 @@ void app::Model::free( ) {
     glDisableVertexAttribArray( Data::Attrib_Pos );
     glBindBuffer( GL_ARRAY_BUFFER, Zero );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Zero );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
     glDeleteProgram( data_->idProgram );
     glDeleteBuffers( Data::Buffer_Count, data_->buffers );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 #elif APP_TIMELINE == APP_TIMELINE_OBJECT
 bool app::Model::setup( RawData const &raw ) {
@@ -636,7 +625,7 @@ void main( ) {
         glGetShaderiv( idVertex, GL_INFO_LOG_LENGTH, &len[v] );
         glGetShaderiv( idFragment, GL_INFO_LOG_LENGTH, &len[f] );
         glGetProgramiv( idProgram, GL_INFO_LOG_LENGTH, &len[p] );
-        GLint totalLen =  len[v] + len[f] + len[p] + 1;
+        auto totalLen =  APP_CAST( Size, len[v] + len[f] + len[p] + 1 );
         GLint writed1 = 0, writed2 = 0;
         char *infoLog = (char *)c::malloc( totalLen );
         infoLog[0] = '\0';
@@ -672,9 +661,9 @@ void main( ) {
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindVertexArray( data_->object );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, verticesBytes, vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, APP_CAST( GLsizeiptr, verticesBytes), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, indicesBytes, indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, APP_CAST( GLsizeiptr, indicesBytes), indices, GL_STATIC_DRAW );
 
     glEnableVertexAttribArray( Data::Location_Pos );
     glEnableVertexAttribArray( Data::Location_Color );
@@ -684,7 +673,6 @@ void main( ) {
     glBindVertexArray( Zero );
     c::free( vertices );
     c::free( indices );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 
     return true;
 }
@@ -692,44 +680,24 @@ void main( ) {
 void app::Model::bind( ) {
     glUseProgram( data_->idProgram );
     glBindVertexArray( data_->object );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::draw( ) {
-    glDrawElements(GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero);
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
+    glDrawElements(GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount), GL_UNSIGNED_BYTE, (void *)Zero);
 }
 
 void app::Model::free( ) {
     glUseProgram( Zero );
     glBindVertexArray( Zero );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
 }
 
 void app::Model::clean( ) {
     glDeleteProgram( data_->idProgram );
     glDeleteBuffers( Data::Buffer_Count, data_->buffers );
     glDeleteVertexArrays( 1, &data_->object );
-    APP_ASSERT( glGetError( ) == GL_NO_ERROR );
-
 }
 #elif APP_TIMELINE == APP_TIMELINE_DEBUG
-void debug_gl_callback( GLenum, GLenum, GLuint id, GLenum severity, GLsizei, GLchar const *message, void const * ) GLAPIENTRY {
-    son8::c::fprintf( stderr, "GL DEBUG [%u]: %s\n", id, message );
-    if ( severity == GL_DEBUG_SEVERITY_HIGH ) { APP_ASSERT( false and "high severity error" ); }
-}
 bool app::Model::setup( RawData const &raw ) {
-    // debug
-    GLint flagsContext;
-    glGetIntegerv( GL_CONTEXT_FLAGS, &flagsContext );
-    if ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT ) {
-        glEnable( GL_DEBUG_OUTPUT );
-        glEnable( GL_DEBUG_OUTPUT_SYNCHRONOUS );
-        glDebugMessageCallback( debug_gl_callback, nullptr );
-        glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE );
-    } else {
-        c::fprintf( stderr, "app: debug context flag is not set\n" );
-    }
     // shader
     char const *codeShared = "#version 430 core\n";
     char const *codeVertex =
@@ -783,10 +751,10 @@ bool app::Model::setup( RawData const &raw ) {
     // -- upload data to `gpu`
     glGenBuffers( Data::Buffer_Count, data_->buffers );
     glBindBuffer( GL_ARRAY_BUFFER, data_buffer_vbo( data_ ));
-    glBufferData( GL_ARRAY_BUFFER, verticesBytes, vertices, GL_STATIC_DRAW );
+    glBufferData( GL_ARRAY_BUFFER, APP_CAST( GLsizeiptr, verticesBytes), vertices, GL_STATIC_DRAW );
     glBindBuffer( GL_ARRAY_BUFFER, Unbind );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, data_buffer_ebo( data_ ));
-    glBufferData( GL_ELEMENT_ARRAY_BUFFER, indicesBytes, indices, GL_STATIC_DRAW );
+    glBufferData( GL_ELEMENT_ARRAY_BUFFER, APP_CAST( GLsizeiptr, indicesBytes), indices, GL_STATIC_DRAW );
     glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Unbind );
     // -- configure vertex array object
     glGenVertexArrays( 1, &data_->object );
@@ -815,7 +783,7 @@ void app::Model::bind( ) {
 }
 
 void app::Model::draw( ) {
-    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+    glDrawElements( GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount), GL_UNSIGNED_BYTE, (void *)Zero );
 }
 
 void app::Model::free( ) {
@@ -829,50 +797,7 @@ void app::Model::clean( ) {
     glDeleteVertexArrays( 1, &data_->object );
 }
 #elif APP_TIMELINE == APP_TIMELINE_NAME
-bool debug_gl_process( bool drain = false ) {
-    GLint remaining = 0;
-    glGetIntegerv( GL_DEBUG_LOGGED_MESSAGES, &remaining );
-    if ( not remaining ) { return false; }
-    else if ( drain ) {
-        glGetDebugMessageLog( remaining, 0, NULL, NULL, NULL, NULL, NULL, NULL );
-        return false;
-    }
-    static constexpr GLint Num = 8;
-    GLuint ids[Num];
-    GLenum sevs[Num];
-    GLsizei lens[Num];
-    GLint maxMsgLen;
-    glGetIntegerv( GL_MAX_DEBUG_MESSAGE_LENGTH, &maxMsgLen );
-    GLuint bufSize = maxMsgLen * Num;
-    GLchar *msgData = (GLchar *)malloc( bufSize );
-
-    GLuint count = remaining >= Num ? Num : remaining;
-    GLuint read = glGetDebugMessageLog( count, bufSize, NULL, NULL, ids, sevs, lens, msgData );
-    bool crush = false;
-    GLchar const *curr = msgData;
-    for ( GLuint i = 0; i < read; ++i ) {
-        if ( sevs[i] == GL_DEBUG_SEVERITY_HIGH ) { crush = true; }
-        son8::c::fprintf( stderr, "GL DEBUG [%u] %.*s\n", ids[i], lens[i], curr );
-        curr += lens[i];
-    }
-    free( msgData );
-
-    if ( crush ) { APP_ASSERT( false and "high severity error encountered" ); }
-
-    return read > 0u;
-}
 bool app::Model::setup( RawData const &raw ) {
-    GLint flagsContext;
-    glGetIntegerv( GL_CONTEXT_FLAGS, &flagsContext );
-    if ( not ( flagsContext & GL_CONTEXT_FLAG_DEBUG_BIT )) {
-        c::fprintf( stderr, "app: debug context flag is not set" );
-        return false;
-    }
-    glEnable( GL_DEBUG_OUTPUT );
-    glDebugMessageControl( GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_FALSE );
-    // flush leftover debug messages
-    debug_gl_process( true );
-    glDebugMessageControl( GL_DONT_CARE, GL_DEBUG_TYPE_ERROR, GL_DONT_CARE, 0, nullptr, GL_TRUE );
     // Shaders
     char const *codeShared = "#version 460 core\n";
     char const *codeVertex =
@@ -926,8 +851,8 @@ bool app::Model::setup( RawData const &raw ) {
     // -- upload data to `gpu`
     glCreateVertexArrays( 1, &data_->object );
     glCreateBuffers( Data::Buffer_Count, data_->buffers );
-    glNamedBufferStorage( data_buffer_vbo( data_ ), verticesBytes, vertices, Zero );
-    glNamedBufferStorage( data_buffer_ebo( data_ ), indicesBytes, indices, Zero );
+    glNamedBufferStorage( data_buffer_vbo( data_ ), APP_CAST( GLsizeiptr, verticesBytes), vertices, Zero );
+    glNamedBufferStorage( data_buffer_ebo( data_ ), APP_CAST( GLsizeiptr, indicesBytes), indices, Zero );
     glEnableVertexArrayAttrib( data_->object, Data::Location_Pos );
     glEnableVertexArrayAttrib( data_->object, Data::Location_Color );
     glVertexArrayAttribFormat( data_->object, Data::Location_Pos, Vertex_Position_Size, Vertex_Position_Type_GL, GL_FALSE, offsetof( Vertex, xy ));
@@ -949,13 +874,12 @@ void app::Model::bind( ) {
 }
 
 void app::Model::draw( ) {
-    glDrawElements( GL_TRIANGLES, data_->indicesCount, GL_UNSIGNED_BYTE, (void *)Zero );
+    glDrawElements( GL_TRIANGLES, APP_CAST( GLsizei, data_->indicesCount), GL_UNSIGNED_BYTE, (void *)Zero );
 }
 
 void app::Model::free( ) {
     glBindVertexArray( Unbind );
     glUseProgram( Unbind );
-    while ( debug_gl_process( ));
 }
 
 void app::Model::clean( ) {

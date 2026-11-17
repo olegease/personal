@@ -69,8 +69,8 @@ namespace app {
         , "pad offset must be 12");
 
     class RawData {
-        static constexpr auto Vertices_Count_ = 14;
-        static constexpr auto Indices_Count_ = 36;
+        static constexpr Unt2 Vertices_Count_ = 14u;
+        static constexpr Unt2 Indices_Count_ = 36u;
         using Vertices_ = Flat< Vertex, Vertices_Count_ >;
         using Indices_ = Flat< Index, Indices_Count_ >;
         Vertices_ vertices_ = {{
