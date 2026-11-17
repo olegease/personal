@@ -56,7 +56,6 @@ void son8::main( [[maybe_unused]] Args args ) {
     std::string title = std::string{ "Pure " } + Window_Title;
     // operations on same stack frame
     App appData;
-    Debug debug;
     // passing to mutation functions
     App *appPtr = &appData;
     // passing to constant functions
@@ -88,9 +87,10 @@ void son8::main( [[maybe_unused]] Args args ) {
     c::printf( "renderer: %s\n", appPtr->renderer );
     appPtr->version = (char const *)glGetString( GL_VERSION );
     c::printf( "version: %s\n", appPtr->version );
-    debug.init( appPtr->version );
-    debug.drain( );
-    APP_ASSERT( debug.check( ));
+    appPtr->debug.init( appPtr->version );
+    appPtr->debug.use_callback( );
+    appPtr->debug.drain( );
+    APP_ASSERT( appPtr->debug.check( ));
     if ( not appData.model.setup( app->data )) { goto failed_setup; }
 
     glDebugMessageInsert(
@@ -109,7 +109,7 @@ void son8::main( [[maybe_unused]] Args args ) {
         appData.model.bind( );
         appData.model.draw( );
         appData.model.free( );
-        APP_ASSERT( debug.check( ));
+        APP_ASSERT( appPtr->debug.check( ));
         glfwSwapBuffers( app->window );
     } catch ( ... ) { goto failed_while; }
 

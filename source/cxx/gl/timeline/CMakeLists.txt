@@ -41,7 +41,7 @@ add_library( app_timelines )
 add_library( app::timelines ALIAS app_timelines )
 target_sources( app_timelines PRIVATE debug.cxx )
 target_include_directories( app_timelines PUBLIC include )
-target_link_libraries( app_timelines PUBLIC son8::core_lib PRIVATE glad::son8 )
+target_link_libraries( app_timelines PUBLIC son8::core_lib PRIVATE stdc++exp glad::son8 )
 # OpenGL timelines of vertices processing through versions 1.0-4.6 (data, models, buffers)
 # -- pure
 add_executable( vertices-pure vertices/pure.cxx )
